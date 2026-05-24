@@ -1,10 +1,10 @@
 # GPU-Accelerated FTLM for Heisenberg Spin Clusters
 
 Matrix-free implementation of the Finite-Temperature Lanczos Method (FTLM)
-for antiferromagnetic Heisenberg spin clusters, with sector decomposition
-by total S^z and a block-Lanczos sweep over random vectors. The production
-path runs in single precision on the GPU; a double-precision CPU path is
-available as a reference.
+for Heisenberg spin clusters with uniform nearest-neighbor exchange
+coupling, with sector decomposition by total S^z and a block-Lanczos sweep
+over random vectors. The production path runs in single precision on the
+GPU; a double-precision CPU path is available as a reference.
 
 ## Citation
 
@@ -35,7 +35,13 @@ H = J * sum_{<i,j>} S_i . S_j
 
 on one of six predefined cluster geometries (icosahedron, cuboctahedron,
 cube, dodecahedron, icosidodecahedron, ring) for any local spin
-`s = 1/2, 1, 3/2, 2, ...`.
+`s = 1/2, 1, 3/2, 2, ...`. The coupling `J` is a single scalar that
+applies uniformly to every nearest-neighbor bond. `J > 0` corresponds to
+antiferromagnetic, `J < 0` to ferromagnetic exchange. Extending the model
+to bond-dependent couplings `J_{ij}` is straightforward: it only requires
+passing a per-bond coupling vector instead of a scalar through the kernel
+init arguments and replacing the scalar `J` in the diagonal and S+S- /
+S-S+ terms by the corresponding entry of that vector.
 
 The matrix-vector product `H * v` is matrix-free: bonds and on-site
 quantum numbers reconstruct the Hamiltonian action on the fly, and basis
@@ -101,7 +107,7 @@ optional input variables are:
 |---|---|---|
 | `geometry` | char | One of `'ico'`, `'cubo'`, `'cube'`, `'dodeca'`, `'icosid'`, `'ring'`. |
 | `s_val` | scalar | Local spin: `0.5`, `1.0`, `1.5`, `2.0`, ... |
-| `J` | scalar | Antiferromagnetic exchange coupling (any finite real). |
+| `J` | scalar | Heisenberg exchange coupling, applied uniformly to every nearest-neighbor bond (any finite real; `J > 0` antiferromagnetic, `J < 0` ferromagnetic). |
 | `R` | integer | FTLM random vectors per sector. |
 | `M_lz` | integer | Lanczos iterations per random vector. |
 | `T_range` | vector | Temperature grid (positive, units of `J/k_B`). |

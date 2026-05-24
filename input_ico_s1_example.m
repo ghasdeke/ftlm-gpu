@@ -37,7 +37,9 @@ geometry = 'ico';
 % Local spin quantum number (0.5, 1.0, 1.5, 2.0, ...).
 s_val    = 1.0;
 
-% Antiferromagnetic exchange coupling (sign convention: H = +J sum S_i.S_j).
+% Heisenberg exchange coupling, applied uniformly to every nearest-neighbor
+% bond.  Sign convention: H = +J * sum_{<i,j>} S_i . S_j.  J > 0 yields
+% antiferromagnetic exchange, J < 0 ferromagnetic.  Any finite real value.
 J        = 1.0;
 
 % Number of FTLM random vectors per S^z sector.
