@@ -18,7 +18,7 @@ abstract: >-
 version: "1.0.0"
 date-released: "TBD"        # set to the actual release date (YYYY-MM-DD)
 license: Apache-2.0
-repository-code: "TBD"      # set to the GitHub/GitLab URL once chosen
+repository-code: "https://github.com/ghasdeke/ftlm-gpu"
 keywords:
   - Heisenberg model
   - spin cluster
