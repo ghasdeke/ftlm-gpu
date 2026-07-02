@@ -41,8 +41,8 @@ authors:
       Helmholtz-Zentrum Dresden-Rossendorf
     # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   # optional, fill in or remove
 
-# Preferred citation: the accompanying paper.
-# Fill in journal, doi, volume, pages once accepted/published.
+# Preferred citation: the accompanying paper (arXiv preprint).
+# Update journal, doi, volume, pages once accepted/published.
 preferred-citation:
   type: article
   title: "GPU-accelerated finite-temperature Lanczos method for spin Hamiltonians"
@@ -53,9 +53,11 @@ preferred-citation:
     - family-names: "Kuehne"
       given-names: "Thomas D."
       # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"
-  journal: "TBD"
+  journal: "arXiv"
   year: 2026
-  # doi: "10.XXXX/XXXXXX"
+  doi: "10.48550/arXiv.2605.26261"
+  url: "https://arxiv.org/abs/2605.26261"
+  # Once published in a journal, replace journal/doi and add:
   # volume: 0
   # issue: 0
   # start: 0

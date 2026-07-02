@@ -17,7 +17,7 @@ The accompanying paper is:
 
 > S. Ghassemi Tabrizi and T. D. Kühne,
 > *GPU-accelerated finite-temperature Lanczos method for spin
-> Hamiltonians*, arXiv:XXXX.XXXXX (2026). [UPDATE WITH FINAL REFERENCE]
+> Hamiltonians*, [arXiv:2605.26261](https://arxiv.org/abs/2605.26261) (2026).
 
 ## Overview
 
