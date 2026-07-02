@@ -47,7 +47,9 @@ function ftlm_observables(input_file)
 %
 %   Citation:
 %       If you use this code, please cite
-%       Ghassemi Tabrizi and Kuehne, [PAPER REFERENCE TBD].
+%       S. Ghassemi Tabrizi and T. D. Kuehne, "GPU-accelerated
+%       finite-temperature Lanczos method for spin Hamiltonians"
+%       (see CITATION.cff for the up-to-date reference).
 
 % ================================================================
 % Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
@@ -200,6 +202,16 @@ bonds_flat = int32(reshape(bonds' - 1, [], 1));   % 0-based, interleaved (i,j)
 d_loc   = round(2*s_val + 1);   % local Hilbert space dimension
 n_total = d_loc^N;              % full Hilbert space dimension
 M_max   = round(N * s_val);     % maximum total S^z
+
+% The MEX kernels encode state labels as signed 32-bit integers and
+% support at most 32 sites (MAX_SITES). Reject out-of-range systems
+% here rather than risking silent integer overflow downstream.
+assert(N <= 32, ...
+    'N = %d exceeds the kernel limit of 32 sites.', N);
+assert(n_total <= 2^31, ...
+    ['d_loc^N = %d^%d = %.3g exceeds 2^31: state labels do not fit ', ...
+     'into the int32 encoding used by the MEX kernels. Reduce N or s_val.'], ...
+    d_loc, N, n_total);
 
 % Compact spin label for filenames: '1', '1o2', '3o2', ...
 two_s = round(2 * s_val);

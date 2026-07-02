@@ -14,12 +14,13 @@ abstract: >-
   sweep over random vectors. Computes the specific heat C(T), magnetic
   susceptibility chi(T), and the effective partition function Z_eff(T)
   on a user-supplied temperature grid. The production path runs in
-  single precision on the GPU (CUDA, cuBLAS); a double-precision OpenMP
+  single precision on the GPU (CUDA); a double-precision OpenMP
   CPU path is available as a reference.
-version: "1.0.0"
-date-released: "TBD"        # set to the actual release date (YYYY-MM-DD)
+version: "1.1.0"
+date-released: "2026-07-03"
 license: Apache-2.0
 repository-code: "https://github.com/ghasdeke/ftlm-gpu"
+doi: "10.5281/zenodo.20378647"   # Zenodo archive of the software (see paper)
 keywords:
   - Heisenberg model
   - spin cluster
@@ -41,10 +42,10 @@ authors:
     # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   # optional, fill in or remove
 
 # Preferred citation: the accompanying paper.
-# Fill in journal, year, doi, volume, pages once accepted/published.
+# Fill in journal, doi, volume, pages once accepted/published.
 preferred-citation:
   type: article
-  title: "TBD (paper title)"
+  title: "GPU-accelerated finite-temperature Lanczos method for spin Hamiltonians"
   authors:
     - family-names: "Ghassemi Tabrizi"
       given-names: "Shadan"

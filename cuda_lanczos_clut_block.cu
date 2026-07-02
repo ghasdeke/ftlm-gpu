@@ -64,13 +64,12 @@
  *   cuda_lanczos_clut_block('cleanup')
  *
  * Compile:
- *   mexcuda cuda_lanczos_clut_block.cu -lcublas
+ *   mexcuda cuda_lanczos_clut_block.cu
  * ================================================================
  */
 
 #include "mex.h"
 #include "gpu/mxGPUArray.h"
-#include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <string.h>
 
@@ -96,7 +95,6 @@ __constant__ int    c_d_minus_1;
 /* ================================================================
  * Persistent state
  * ================================================================ */
-static cublasHandle_t s_blH          = NULL;
 static int           *s_d_block_base = NULL;
 static unsigned int  *s_d_block_mask = NULL;
 static int           *s_d_basis      = NULL;
@@ -107,22 +105,8 @@ static int            s_dim          = 0;
 static int            s_B_batch      = 0;
 static bool           s_init         = false;
 
-void cleanup(void) {
-    if (s_d_block_base) cudaFree(s_d_block_base);
-    if (s_d_block_mask) cudaFree(s_d_block_mask);
-    if (s_d_basis)      cudaFree(s_d_basis);
-    if (s_d_v)          cudaFree(s_d_v);
-    if (s_d_vp)         cudaFree(s_d_vp);
-    if (s_d_w)          cudaFree(s_d_w);
-    if (s_blH)          cublasDestroy(s_blH);
-    s_d_block_base = NULL; s_d_block_mask = NULL;
-    s_d_basis = NULL;
-    s_d_v = NULL; s_d_vp = NULL; s_d_w = NULL;
-    s_blH = NULL; s_init = false;
-}
-
 /* ================================================================
- * Device: compressed lookup (identical to cuda_lanczos_clut.cu)
+ * Device: compressed lookup (CLT bitmap + prefix count)
  * ================================================================ */
 __device__ __forceinline__ int clut_lookup(
     const int          * __restrict__ block_base,
@@ -258,21 +242,6 @@ __global__ void transpose_col2interleaved(
 }
 
 /* ================================================================
- * Helper kernel: transpose interleaved -> column-major
- * (only for debugging/export, not in the hot path)
- * ================================================================ */
-__global__ void transpose_interleaved2col(
-    float       * __restrict__ dst,
-    const float * __restrict__ src,
-    int dim, int B)
-{
-    int t = blockIdx.x * blockDim.x + threadIdx.x;
-    if (t >= dim) return;
-    for (int b = 0; b < B; b++)
-        dst[t + b * dim] = src[t * B + b];
-}
-
-/* ================================================================
  * Helper kernel: BLAS substitute for interleaved layout
  *
  * Fused Lanczos update for all B chains in one kernel:
@@ -284,13 +253,6 @@ __global__ void transpose_interleaved2col(
  *
  * Uses block reduction for the B dot products and norms.
  * ================================================================ */
-
-/* Warp reduction */
-__device__ __forceinline__ float warp_reduce_sum(float val) {
-    for (int offset = 16; offset > 0; offset >>= 1)
-        val += __shfl_down_sync(0xFFFFFFFF, val, offset);
-    return val;
-}
 
 #define FUSED_BS 256
 
@@ -451,14 +413,13 @@ static void cleanup_all(void) {
     if (s_d_beta)       cudaFree(s_d_beta);
     if (s_d_beta_prev)  cudaFree(s_d_beta_prev);
     if (s_d_tmp_col)    cudaFree(s_d_tmp_col);
-    if (s_blH)          cublasDestroy(s_blH);
     s_d_block_base = NULL; s_d_block_mask = NULL;
     s_d_basis = NULL;
     s_d_v = NULL; s_d_vp = NULL; s_d_w = NULL;
     s_d_partial = NULL; s_d_alpha = NULL;
     s_d_beta = NULL; s_d_beta_prev = NULL;
     s_d_tmp_col = NULL;
-    s_blH = NULL; s_init = false;
+    s_init = false;
 }
 
 void mexFunction(int nlhs, mxArray *plhs[],
@@ -489,9 +450,17 @@ void mexFunction(int nlhs, mxArray *plhs[],
         s_dim         = (int)mxGetScalar(prhs[9]);
         s_B_batch     = (int)mxGetScalar(prhs[10]);
 
-        if (s_B_batch > MAX_B) {
+        if (s_B_batch < 1 || s_B_batch > MAX_B) {
             mexErrMsgIdAndTxt("clut_block:B",
-                "B_batch = %d exceeds MAX_B = %d!", s_B_batch, MAX_B);
+                "B_batch = %d outside [1, MAX_B = %d]!", s_B_batch, MAX_B);
+        }
+        if (N < 1 || N > MAX_SITES) {
+            mexErrMsgIdAndTxt("clut_block:N",
+                "N = %d outside [1, MAX_SITES = %d]!", N, MAX_SITES);
+        }
+        if (nb < 1 || nb > MAX_BONDS) {
+            mexErrMsgIdAndTxt("clut_block:bonds",
+                "n_bonds = %d outside [1, MAX_BONDS = %d]!", nb, MAX_BONDS);
         }
 
         init_common(h_bonds, nb, N, d, sv, J);
@@ -527,14 +496,12 @@ void mexFunction(int nlhs, mxArray *plhs[],
         /* Scratch buffer for column-major -> interleaved transposition */
         cudaMalloc(&s_d_tmp_col, vec_bytes);
 
-        cublasCreate(&s_blH);
-
         mxGPUDestroyGPUArray(g_bb);
         mxGPUDestroyGPUArray(g_bm);
         mxGPUDestroyGPUArray(g_bs);
 
         s_init = true;
-        mexLock();
+        if (!mexIsLocked()) mexLock();
         mexAtExit(cleanup_all);
     }
 
@@ -718,6 +685,11 @@ void mexFunction(int nlhs, mxArray *plhs[],
     else if (strcmp(mode, "cleanup") == 0)
     {
         cleanup_all();
-        mexUnlock();
+        if (mexIsLocked()) mexUnlock();
+    }
+    else {
+        mexErrMsgIdAndTxt("clut_block:mode",
+            "Unknown mode: '%s'. Use 'init', 'block_lanczos', 'cleanup'.",
+            mode);
     }
 }

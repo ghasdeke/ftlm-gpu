@@ -48,10 +48,10 @@ clear functions; clear mex;
 
 fprintf('\n=== Compilation of release kernels ===\n\n');
 
-%% 1.  CUDA: cuda_lanczos_clut_block.cu  (requires cuBLAS)
-fprintf('Compiling cuda_lanczos_clut_block.cu (with cuBLAS) ...\n');
+%% 1.  CUDA: cuda_lanczos_clut_block.cu
+fprintf('Compiling cuda_lanczos_clut_block.cu ...\n');
 try
-    mexcuda('cuda_lanczos_clut_block.cu', '-lcublas');
+    mexcuda('cuda_lanczos_clut_block.cu');
     fprintf('  Compiled successfully.\n\n');
 catch ME
     fprintf('  ERROR: %s\n', ME.message);
@@ -59,7 +59,7 @@ catch ME
     rethrow(ME);
 end
 
-%% 2.  CUDA: cuda_lanczos_crank_Sr_general.cu  (no cuBLAS required)
+%% 2.  CUDA: cuda_lanczos_crank_Sr_general.cu
 fprintf('Compiling cuda_lanczos_crank_Sr_general.cu ...\n');
 try
     mexcuda('cuda_lanczos_crank_Sr_general.cu');
@@ -87,6 +87,9 @@ try
 catch ME
     fprintf('  ERROR: %s\n', ME.message);
     fprintf('  Hint: check the OpenMP support of your compiler.\n');
+    fprintf('  Note: if cpu_lanczos_omp was already used in this MATLAB\n');
+    fprintf('  session, the MEX file is locked in memory (deliberately, see\n');
+    fprintf('  the source header). Restart MATLAB and re-run build_all.\n');
     rethrow(ME);
 end
 

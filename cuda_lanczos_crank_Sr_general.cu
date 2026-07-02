@@ -598,18 +598,8 @@ void mexFunction(int nlhs, mxArray *plhs[],
         cudaMalloc(&s_d_beta_prev,  s_B_batch * sizeof(float));
         cudaMalloc(&s_d_tmp_col,    vec_bytes);
 
-        mexPrintf("  crank_Sr_general init:\n");
-        mexPrintf("    N=%d  2s=%d (s=%.1f)  A_total=%d  dim=%d  B=%d\n",
-                  N, two_s, 0.5 * two_s, A_total, s_dim, s_B_batch);
-        mexPrintf("    bits_per_digit=%d  state in uint64 (%d/64 bits used)\n",
-                  bits, N * bits);
-        mexPrintf("    D_cum in shared mem: %.1f KB / block\n",
-                  DCUM_TABLE_SIZE * 4.0 / 1024.0);
-        mexPrintf("    VRAM vectors: %.1f MB  (no CLT, no basis)\n",
-                  4.0 * vec_bytes / 1e6);
-
         s_init = true;
-        mexLock();
+        if (!mexIsLocked()) mexLock();
         mexAtExit(cleanup_all);
     }
 
@@ -771,10 +761,11 @@ void mexFunction(int nlhs, mxArray *plhs[],
     else if (strcmp(mode, "cleanup") == 0)
     {
         cleanup_all();
-        mexUnlock();
+        if (mexIsLocked()) mexUnlock();
     }
     else {
         mexErrMsgIdAndTxt("crank_Sr_gen:mode",
-            "Unknown mode: '%s'", mode);
+            "Unknown mode: '%s'. Use 'init', 'block_lanczos', 'cleanup'.",
+            mode);
     }
 }

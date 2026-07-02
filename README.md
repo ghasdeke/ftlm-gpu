@@ -15,7 +15,9 @@ read it directly.
 
 The accompanying paper is:
 
-> [PAPER REFERENCE TBD]
+> S. Ghassemi Tabrizi and T. D. Kühne,
+> *GPU-accelerated finite-temperature Lanczos method for spin
+> Hamiltonians*, arXiv:XXXX.XXXXX (2026). [UPDATE WITH FINAL REFERENCE]
 
 ## Overview
 
@@ -50,9 +52,18 @@ sweep over `R` random vectors per sector. Three MEX kernels are provided:
 
 | Kernel | Backend | Precision | Notes |
 |---|---|---|---|
-| `cuda_lanczos_clut_block.cu` | CUDA + cuBLAS | FP32 | Production GPU path |
+| `cuda_lanczos_clut_block.cu` | CUDA | FP32 | Production GPU path |
 | `cuda_lanczos_crank_Sr_general.cu` | CUDA | FP32 | Alternative GPU path (combinatorial ranking) |
 | `cpu_lanczos_omp.c` | OpenMP | FP64 | Reference CPU path |
+
+Single-vector Lanczos corresponds to running a block kernel with block
+size `B = 1`; the benchmark scripts use this to time the single-vector
+variants.
+
+**Size limits:** the kernels encode basis states as 32-bit integers, so
+`(2*s_val + 1)^N` must not exceed `2^31` (about 2.1e9), and `N <= 32`
+sites are supported. `ftlm_observables` checks both limits and reports
+a clear error for out-of-range systems.
 
 ## Requirements
 
@@ -172,11 +183,18 @@ The `examples/` directory contains the additional drivers used in the
 paper:
 
 - `benchmark_ico_v1.m`  — runtime benchmark on the icosahedron
-  (Paper Table 3, M1...M5).
-- `benchmark_icosid_v1.m` — same benchmark on the icosidodecahedron.
+  (Paper Table 3, methods M1...M5). The header documents which
+  configuration reproduces which Table 3 row.
+- `benchmark_icosid_v1.m` — same benchmark on the icosidodecahedron
+  (M = 0 sector, dim = 1.55e8; requires a GPU with roughly 16 GB or
+  more of memory).
 - `plot_paperfig1_v2.m` — generates Figure 1 (`C(T)` and `chi(T)`,
   GPU FP32 vs.\ CPU FP64) from a `.mat` file produced by
   `ftlm_observables`.
+
+In the benchmarks, the single-vector methods (GPU-CLT-single,
+GPU-CRank-single) run the corresponding block kernel with `B = 1`,
+which is exactly the single-vector Lanczos recursion.
 
 These scripts depend on the small helper `format_num.m`.
 
@@ -185,6 +203,7 @@ These scripts depend on the small helper `format_num.m`.
 | File | Purpose |
 |---|---|
 | `README.md` | This file. |
+| `CHANGELOG.md` | Release history. |
 | `LICENSE` | Full Apache License 2.0 text. |
 | `NOTICE` | Copyright statement. |
 | `CITATION.cff` | Machine-readable citation metadata. |
@@ -192,7 +211,7 @@ These scripts depend on the small helper `format_num.m`.
 | `ftlm_observables.m` | Main entry point — see *Quick start*. |
 | `input_ico_s1_example.m` | Commented input file template (FTLM default workflow). |
 | `input_ico_s1o2_ed_example.m` | Second example: full exact diagonalization (s = 1/2 icosahedron). |
-| `cuda_lanczos_clut_block.cu` | GPU block-Lanczos kernel (CLT, FP32, cuBLAS). |
+| `cuda_lanczos_clut_block.cu` | GPU block-Lanczos kernel (CLT, FP32). |
 | `cuda_lanczos_crank_Sr_general.cu` | GPU block-Lanczos kernel (CRank, FP32). |
 | `cpu_lanczos_omp.c` | CPU block-Lanczos kernel (FP64, OpenMP). |
 | `examples/benchmark_ico_v1.m` | Paper Table 3 reproduction, icosahedron. |

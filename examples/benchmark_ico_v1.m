@@ -27,10 +27,15 @@
 %
 %  5 methods, n_runs runs per method (first run discarded as warmup):
 %    M1  CPU-blk-CLUT          cpu_lanczos_omp                FP64, OMP, B=8
-%    M2  GPU-CLT-single        cuda_lanczos_clut              FP32
+%    M2  GPU-CLT-single        cuda_lanczos_clut_block        FP32, B=1
 %    M3  GPU-CLT-block         cuda_lanczos_clut_block        FP32, B=adaptive
 %    M4  GPU-CRank-single      cuda_lanczos_crank_Sr_general  FP32, B=1
 %    M5  GPU-CRank-block       cuda_lanczos_crank_Sr_general  FP32, B=adaptive
+%
+%  The single-vector variants (M2, M4) run the corresponding block
+%  kernel with block size B = 1, which is exactly the single-vector
+%  Lanczos recursion (for B = 1 the interleaved and column-major
+%  vector layouts coincide).
 %
 %  For each run the following are recorded:
 %    - wall-clock time of the hot Lanczos loop
@@ -39,22 +44,24 @@
 %      directly after each kernel 'init' call (CPU methods: NaN)
 %
 %  Aggregation: median and standard deviation over the runs after
-%  discarding the warmup.
+%  discarding the warmup (with n_runs = 1 the single run is kept).
+%
+%  Reproducing the paper (Table 3), icosahedron rows -- set in the
+%  CONFIGURATION block below:
+%    s = 1   full FTLM      : s_val = 1.0,  M0_only = false
+%    s = 3/2 full FTLM      : s_val = 1.5,  M0_only = false
+%    s = 2,  M = 0 only     : s_val = 2.0,  M0_only = true
+%  (R_samples = 24 and M_lanczos = 100 as in the paper.)
 %
 %  Output:  benchmark_ico_s<tag>_v1_<timestamp>.mat
 %           spin tag: '1o2' (s=1/2), '1', '3o2' (s=3/2), '2'.
 %           Struct array results(im) with fields method/label/B/R/M_lz/n_runs/
 %           t_wall_runs/t_wall_median/t_wall_std/E0_runs/vram_peak_mb_runs/vram_peak_mb
 %
-%  Required MEX files (on the MATLAB path):
-%    cpu_lanczos_omp.mexw64
-%    cuda_lanczos_clut.mexw64
-%    cuda_lanczos_clut_block.mexw64
-%    cuda_lanczos_crank_Sr_general.mexw64
-%  Required helpers (defined as local functions at the end of this file):
-%    icosahedron_adjacency, build_sector_basis, enumerate_popcount_states,
-%    build_lookup, build_clut_arrays, build_heisenberg_sparse,
-%    process_sector_cpu, solve_tridiag, lanczos_run, ftlm_heat_capacity
+%  Required MEX files (on the MATLAB path, built by build_all.m):
+%    cpu_lanczos_omp
+%    cuda_lanczos_clut_block
+%    cuda_lanczos_crank_Sr_general
 %  Required standalone function: format_num.m
 %
 %  History:
@@ -63,6 +70,10 @@
 %                    filename now contains the spin tag.  Includes the
 %                    bug fix of 21.05.2026 in benchmark_omp_block_clut_seq
 %                    (basis_omp = int32(basis) instead of int32(basis)-1).
+%        07.2026     Release cleanup: GPU-CLT-single (M2) now uses
+%                    cuda_lanczos_clut_block with B = 1 (the standalone
+%                    single-vector kernel is not part of the release);
+%                    aggregation fixed for n_runs = 1; dead helpers removed.
 %  ================================================================
 
 clear; close all; clc;
@@ -71,15 +82,16 @@ clear; close all; clc;
 %  CONFIGURATION
 %  ============================================================
 geometry       = 'ico';
-s_val          = 1.5;          % 0.5 | 1.0 | 1.5 | 2.0  (spin quantum number)
+s_val          = 1.0;        % 0.5 | 1.0 | 1.5 | 2.0  (spin quantum number)
 J              = 1.0;
-M_lanczos      = 100;
-R_samples      = 24;
+M_lanczos      = 100;        % Lanczos steps per random vector (paper: 100)
+R_samples      = 24;         % random vectors per sector (paper: 24)
 ed_thresh      = 1;          % sectors with dim<=ed_thresh handled by full ED (default 1: only dim=1)
-n_runs         = 1;          % 1 warmup + 2 measurement runs (with n_runs=1: no warmup discard, a single measurement run)
+n_runs         = 3;          % runs per method; run 1 is discarded as warmup
+                             % (n_runs=1: single run, kept without warmup discard)
 L2_cache_bytes = 48e6;       % RTX 4000 Ada: 48 MB L2 cache
-M0_only        = true;       % true: only M=0 sector (showcase mode, useful for large s/dim)
-                             % false: full FTLM over all M = 0..N*s
+M0_only        = false;      % true: only M=0 sector (showcase mode, useful for large s/dim)
+                             % false: full FTLM over all M = 0..N*s (paper, s = 1 and 3/2)
 
 % Spin tag for logs and output filename
 if abs(s_val - 0.5) < 1e-9
@@ -122,7 +134,7 @@ gpu = gpuDevice;
 fprintf('GPU: %s  (%.1f GB VRAM, Compute %s)\n', ...
     gpu.Name, gpu.TotalMemory/1e9, gpu.ComputeCapability);
 
-req_mex = {'cpu_lanczos_omp', 'cuda_lanczos_clut', ...
+req_mex = {'cpu_lanczos_omp', ...
            'cuda_lanczos_clut_block', 'cuda_lanczos_crank_Sr_general'};
 for k = 1:length(req_mex)
     assert(exist(req_mex{k}, 'file') == 3, ...
@@ -141,7 +153,7 @@ fprintf('CPU OMP threads: %d\n\n', n_omp);
 %               NaN = not applicable / method sets B internally)
 methods_cfg = {
     'cpu_omp_clut',       sprintf('CPU-blk-CLUT (B=8, FP64, %dT)', n_omp),  NaN ;
-    'cuda_clut',          'GPU-CLT-single (FP32)',                          NaN ;
+    'cuda_clut_blk',      'GPU-CLT-single (B=1, FP32)',                     1   ;
     'cuda_clut_blk',      'GPU-CLT-block (B=auto, FP32)',                   0   ;
     'cuda_crank_Sr_gen',  'GPU-CRank-single (B=1, FP32)',                   1   ;
     'cuda_crank_Sr_gen',  'GPU-CRank-block (B=auto, FP32)',                 0   ;
@@ -213,13 +225,6 @@ for im = 1:n_methods
                         bonds, bonds_flat, s_val, J, N, n_total, d_loc, ...
                         M_lanczos, R_samples, ed_thresh);
 
-            case 'cuda_clut'
-                [all_E, all_w, t, peak_vram] = ...
-                    benchmark_cuda_clut_seq( ...
-                        sec_basis, sec_dim, sec_mult, n_sec, ...
-                        bonds, bonds_flat, s_val, J, N, n_total, d_loc, ...
-                        M_lanczos, R_samples, ed_thresh);
-
             case 'cuda_clut_blk'
                 [all_E, all_w, t, peak_vram] = ...
                     benchmark_cuda_clut_block_seq( ...
@@ -247,9 +252,14 @@ for im = 1:n_methods
         if isnan(vram_runs(r)), fprintf('—\n'); else, fprintf('%.0f MB\n', vram_runs(r)); end
     end
 
-    % Aggregation (warmup = run 1 discarded)
-    t_keep    = t_runs(2:end);
-    vram_keep = vram_runs(2:end);
+    % Aggregation (warmup = run 1 discarded; with a single run keep it)
+    if n_runs >= 2
+        t_keep    = t_runs(2:end);
+        vram_keep = vram_runs(2:end);
+    else
+        t_keep    = t_runs;
+        vram_keep = vram_runs;
+    end
 
     results(im).method            = mname;
     results(im).label             = mlabel;
@@ -330,8 +340,8 @@ fprintf('\nDone.\n');
 
 %% ============================================================
 %  ============================================================
-%  LOCAL FUNCTIONS  (taken from polyhedra_cpu_vs_gpu_v1.m,
-%                    benchmark_* functions with VRAM peak capture)
+%  LOCAL FUNCTIONS  (benchmark drivers with VRAM peak capture,
+%                    physics helpers, geometry)
 %  ============================================================
 %  ============================================================
 
@@ -426,103 +436,13 @@ end
 
 %% ================================================================
 
-function [all_E, all_w, t_total, peak_vram_bytes] = benchmark_cuda_clut_seq( ...
-    sec_basis, sec_dim, sec_mult, n_sec, ...
-    bonds, bonds_flat, s, J, N, n_total, d_loc, ...
-    M_lanczos, R_samples, ed_thresh)
-%BENCHMARK_CUDA_CLUT_SEQ  CUDA single vector with CLUT
-
-    BLOCK_SIZE = 32;
-
-    E_cell = cell(n_sec, 1);
-    w_cell = cell(n_sec, 1);
-
-    n_large = sum(sec_dim > ed_thresh);
-    i_large = 0;
-
-    peak_vram_bytes = 0;
-    gpu_h = gpuDevice;
-    tot_vram = gpu_h.TotalMemory;
-
-    tic_total = tic;
-    for k = 1:n_sec
-        basis = sec_basis{k};
-        dim   = sec_dim(k);
-        mult  = sec_mult(k);
-
-        M_lz = min(M_lanczos, dim);
-        R    = min(R_samples, dim);
-        rng(dim);
-
-        if dim <= ed_thresh
-            lookup_1b = build_lookup(basis, dim, n_total);
-            H = build_heisenberg_sparse(basis, lookup_1b, bonds, ...
-                s, J, N, n_total);
-            E_sec = sort(eig(full(H)));
-            E_cell{k} = E_sec;
-            w_cell{k} = mult * ones(dim, 1);
-        else
-            i_large = i_large + 1;
-            tic_sec = tic;
-            fprintf('\n    Sec. %d/%d (dim=%s): ', i_large, n_large, ...
-                format_num(dim));
-
-            % Build CLT
-            [block_base, block_mask] = build_clut_arrays(basis, n_total, BLOCK_SIZE);
-
-            basis_cuda = int32(basis);
-
-            cuda_lanczos_clut('init', ...
-                gpuArray(block_base), gpuArray(block_mask), ...
-                gpuArray(basis_cuda), ...
-                bonds_flat, N, d_loc, s, J, dim);
-            wait(gpu_h);
-            used_now = tot_vram - gpu_h.AvailableMemory;
-            if used_now > peak_vram_bytes, peak_vram_bytes = used_now; end
-
-            E_k = zeros(M_lz * R, 1);
-            w_k = zeros(M_lz * R, 1);
-            idx = 0;
-
-            for r = 1:R
-                v0 = gpuArray(single(randn(dim, 1)));
-                [al, be] = cuda_lanczos_clut('lanczos', v0, M_lz);
-                [eps_l, Q1sq] = solve_tridiag(al, be);
-                n_l = length(eps_l);
-
-                E_k(idx+1 : idx+n_l) = eps_l;
-                w_k(idx+1 : idx+n_l) = mult * (dim / R) * Q1sq;
-                idx = idx + n_l;
-
-                if mod(r, 10) == 0 || r == R
-                    fprintf('%d/%d ', r, R);
-                end
-            end
-
-            cuda_lanczos_clut('cleanup');
-            fprintf(' (%.1f s, cum. %.0f s)', toc(tic_sec), toc(tic_total));
-
-            E_cell{k} = E_k(1:idx);
-            w_cell{k} = w_k(1:idx);
-        end
-    end
-    wait(gpuDevice);
-    t_total = toc(tic_total);
-    if n_large > 0, fprintf('\n  '); end
-
-    all_E = vertcat(E_cell{:});
-    all_w = vertcat(w_cell{:});
-end
-
-%% ================================================================
-
 function [all_E, all_w, t_total, peak_vram_bytes] = benchmark_cuda_clut_block_seq( ...
     sec_basis, sec_dim, sec_mult, n_sec, ...
     bonds, bonds_flat, s, J, N, n_total, d_loc, ...
     M_lanczos, R_samples, ed_thresh, B_batch, L2_cache)
 %BENCHMARK_CUDA_CLUT_BLOCK_SEQ  GPU block Lanczos with CLT (generic)
 
-    if nargin < 17 || isempty(L2_cache), L2_cache = 48e6; end
+    if nargin < 16 || isempty(L2_cache), L2_cache = 48e6; end
     adaptive_B = (B_batch == 0);
 
     BLOCK_SIZE = 32;
@@ -756,41 +676,6 @@ end
 
 %% ================================================================
 
-function [E, w] = process_sector_cpu(basis, dim, mult, ...
-    bonds, s, J, N, n_total, M_lanczos, R_samples, ed_thresh)
-%PROCESS_SECTOR_CPU  Process a single sector on the CPU (sparse H, FP64)
-
-    lookup = build_lookup(basis, dim, n_total);
-
-    M_lz = min(M_lanczos, dim);
-    R    = min(R_samples, dim);
-    rng(dim);
-
-    H = build_heisenberg_sparse(basis, lookup, bonds, s, J, N, n_total);
-
-    if dim <= ed_thresh
-        E_sec = sort(eig(full(H)));
-        E = E_sec;
-        w = mult * ones(dim, 1);
-    else
-        E = zeros(M_lz * R, 1);
-        w = zeros(M_lz * R, 1);
-        idx = 0;
-        for r = 1:R
-            v0 = randn(dim, 1);
-            [eps_l, Q1sq] = lanczos_run(H, v0, M_lz);
-            n_l = length(eps_l);
-            E(idx+1 : idx+n_l) = eps_l;
-            w(idx+1 : idx+n_l) = mult * (dim / R) * Q1sq;
-            idx = idx + n_l;
-        end
-        E = E(1:idx);
-        w = w(1:idx);
-    end
-end
-
-%% ================================================================
-
 function [eps_l, Q1sq] = solve_tridiag(alpha, beta)
 %SOLVE_TRIDIAG  Solve the tridiagonal eigenvalue problem (CPU, FP64)
 
@@ -802,63 +687,6 @@ function [eps_l, Q1sq] = solve_tridiag(alpha, beta)
     [Q, D] = eig(T, 'vector');
     eps_l = D;
     Q1sq = abs(Q(1,:)').^2;
-end
-
-%% ================================================================
-
-function [eps_l, Q1sq] = lanczos_run(H, v0, M_lz)
-%LANCZOS_RUN  Lanczos iteration (sparse H, CPU, FP64)
-
-    dim = length(v0);
-    M_lz = min(M_lz, dim);
-    v = v0 / norm(v0);
-    v_prev = zeros(dim, 1);
-    alpha = zeros(M_lz, 1);
-    beta_off = zeros(M_lz, 1);
-    actual_steps = M_lz;
-
-    for j = 1:M_lz
-        w = H * v;
-        alpha(j) = v' * w;
-        w = w - alpha(j) * v;
-        if j > 1
-            w = w - beta_off(j-1) * v_prev;
-        end
-        b = norm(w);
-        if b < 1e-14
-            actual_steps = j;
-            break;
-        end
-        if j < M_lz
-            beta_off(j) = b;
-            v_prev = v;
-            v = w / b;
-        end
-    end
-
-    [eps_l, Q1sq] = solve_tridiag(alpha(1:actual_steps), ...
-        beta_off(1:actual_steps));
-end
-
-%% ================================================================
-
-function C = ftlm_heat_capacity(all_E, all_w, T_range)
-%FTLM_HEAT_CAPACITY  Heat capacity from (E, w) pairs
-
-    E_min = min(all_E);
-    dE = all_E - E_min;
-    nT = length(T_range);
-    C = zeros(nT, 1);
-
-    for iT = 1:nT
-        beta = 1.0 / T_range(iT);
-        boltz = all_w .* exp(-beta * dE);
-        Z = sum(boltz);
-        if Z < 1e-300, C(iT) = 0; continue; end
-        E_avg  = sum(all_E .* boltz) / Z;
-        E2_avg = sum(all_E.^2 .* boltz) / Z;
-        C(iT) = beta^2 * (E2_avg - E_avg^2);
-    end
 end
 
 %% ================================================================
