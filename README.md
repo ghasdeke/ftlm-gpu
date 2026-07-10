@@ -192,9 +192,27 @@ paper:
   GPU FP32 vs.\ CPU FP64) from a `.mat` file produced by
   `ftlm_observables`.
 
+To run a benchmark after `build_all`, start it from the repository
+root or from `examples/`, e.g.
+
+```
+matlab -batch "cd examples; benchmark_ico_v1"
+```
+
+The benchmark scripts add the repository root (MEX binaries) and
+`examples/` (helpers) to the MATLAB path automatically, so either
+starting directory works.
+
 In the benchmarks, the single-vector methods (GPU-CLT-single,
 GPU-CRank-single) run the corresponding block kernel with `B = 1`,
 which is exactly the single-vector Lanczos recursion.
+
+Note on random-vector counts: the precision analysis in the paper
+(Figs. 1-3) uses `R = 100` random vectors per sector, while the
+quick-start input `input_ico_s1_example.m` uses `R = 50` to keep the
+demo short; set `R = 100` there to match the paper. The benchmark
+scripts already use the paper values (`R = 24` icosahedron, `R = 8`
+icosidodecahedron).
 
 These scripts depend on the small helper `format_num.m`.
 

@@ -78,6 +78,13 @@
 
 clear; close all; clc;
 
+% Make the script location-independent: the MEX binaries built by
+% build_all.m live in the repository root, format_num.m lives in
+% examples/.  Add both directories to the path so the benchmark runs
+% no matter which of the two directories it is started from.
+bench_dir = fileparts(mfilename('fullpath'));
+addpath(bench_dir, fileparts(bench_dir));
+
 %% ============================================================
 %  CONFIGURATION
 %  ============================================================

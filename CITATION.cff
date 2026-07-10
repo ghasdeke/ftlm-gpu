@@ -16,8 +16,8 @@ abstract: >-
   on a user-supplied temperature grid. The production path runs in
   single precision on the GPU (CUDA); a double-precision OpenMP
   CPU path is available as a reference.
-version: "1.1.0"
-date-released: "2026-07-03"
+version: "1.1.1"
+date-released: "2026-07-11"
 license: Apache-2.0
 repository-code: "https://github.com/ghasdeke/ftlm-gpu"
 doi: "10.5281/zenodo.20378647"   # Zenodo archive of the software (see paper)

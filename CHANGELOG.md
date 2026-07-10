@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.1.1 (2026-07-11)
+
+Documentation/usability release. No changes to the physics, the
+algorithms, or the numerical results.
+
+### Fixed
+- Benchmark scripts are now location-independent: they add the
+  repository root (MEX binaries) and `examples/` (helpers) to the
+  MATLAB path themselves. Previously, starting `benchmark_ico_v1` /
+  `benchmark_icosid_v1` from inside `examples/` failed with
+  "Required MEX file missing: cpu_lanczos_omp".
+
+### Added
+- README: explicit invocation line for the benchmarks and a note that
+  the paper's precision analysis (Figs. 1-3) uses `R = 100` random
+  vectors per sector, whereas the quick-start example uses `R = 50`
+  for speed (same note in `input_ico_s1_example.m`).
+- This release is tagged so that the archived version includes the
+  arXiv reference in README/CITATION.cff (the v1.1.0 tag predates
+  that commit).
+
 ## v1.1.0 (2026-07-03)
 
 Code-quality release. No changes to the physics, the algorithms, or the

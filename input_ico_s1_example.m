@@ -42,7 +42,9 @@ s_val    = 1.0;
 % antiferromagnetic exchange, J < 0 ferromagnetic.  Any finite real value.
 J        = 1.0;
 
-% Number of FTLM random vectors per S^z sector.
+% Number of FTLM random vectors per S^z sector.  The quick-start demo
+% uses R = 50 to keep the runtime short; the precision analysis in the
+% paper (Figs. 1-3) uses R = 100.  Set R = 100 to match the paper.
 R        = 50;
 
 % Lanczos iterations per random vector.
