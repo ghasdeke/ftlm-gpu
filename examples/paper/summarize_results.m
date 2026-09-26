@@ -101,10 +101,11 @@ R.cpu_spread_runs = strjoin(arrayfun(@(x) sprintf('%.0f', x), sort(res(i).t_lanc
 R.ic_clt32 = f3(t('icosid_M0', 'GPU-CLT-FP32'));  R.ic_cr32 = f3(t('icosid_M0', 'GPU-CR-FP32'));
 R.ic_clt64 = f3(t('icosid_M0', 'GPU-CLT-FP64'));
 R.ic_cpu64 = f3(t('icosid_M0', 'CPU-CLT-FP64'));  R.ic_cpu32 = f3(t('icosid_M0', 'CPU-CLT-FP32'));
-R.hist_cpu64 = sprintf('%.0f', 2.5 * ts('icosid_M0', 'CPU-CLT-FP64') / 60);
-R.hist_cpu32 = sprintf('%.0f', 2.5 * ts('icosid_M0', 'CPU-CLT-FP32') / 60);
-R.hist_gpu64 = sprintf('%.0f', 2.5 * min(ts('icosid_M0', 'GPU-CLT-FP64'), ts('icosid_M0', 'GPU-CR-FP64')) / 60);
-R.hist_gpu32 = sprintf('%.1f', 2.5 * min(ts('icosid_M0', 'GPU-CLT-FP32'), ts('icosid_M0', 'GPU-CR-FP32')) / 60);
+% historical comparison: Lanczos times of the text scaled from R = 8 to R = 20
+R.hist_cpu64 = sprintf('%.0f', 2.5 * t('icosid_M0', 'CPU-CLT-FP64') / 60);
+R.hist_cpu32 = sprintf('%.0f', 2.5 * t('icosid_M0', 'CPU-CLT-FP32') / 60);
+R.hist_gpu64 = sprintf('%.0f', 2.5 * min(t('icosid_M0', 'GPU-CLT-FP64'), t('icosid_M0', 'GPU-CR-FP64')) / 60);
+R.hist_gpu32 = sprintf('%.1f', 2.5 * min(t('icosid_M0', 'GPU-CLT-FP32'), t('icosid_M0', 'GPU-CR-FP32')) / 60);
 R.b1_text = sprintf('%s s vs. %s s for the $s=3∕2$ icosahedron and %s s vs. %s s for the $s=2$ icosahedron', ...
     f3(t('ico_s3o2', 'GPU-CLT-FP32-B1')), f3(t('ico_s3o2', 'GPU-CR-FP32-B1')), ...
     f3(t('ico_s2_M0', 'GPU-CLT-FP32-B1')), f3(t('ico_s2_M0', 'GPU-CR-FP32-B1')));
@@ -271,10 +272,19 @@ for key = {'ico_s1', 'ico_s3o2'}
     % at the maximum of the transient FP32 deviation: below the truncation error?
     R.(['nl_peak_below_trunc_' tag]) = iff(fp32(ip) < trunc(ip), 'yes', 'no');
     R.(['nl_trunc_at_peak_' tag]) = sci(trunc(ip));
+    pkNL.(tag) = S.NL(ip);
     if strcmp(tag, 's3o2') && any(S.NL == 60) && any(S.NL == 100)
         R.tr60 = sci(trunc(S.NL == 60));
         R.tr100 = sci(trunc(S.NL == 100));
         R.tr_vs_fp32 = iff(trunc(S.NL == 100) < fp32(S.NL == 100), 'below', 'above');
+    end
+end
+
+if exist('pkNL', 'var') && all(isfield(pkNL, {'s1', 's3o2'}))
+    if pkNL.s1 == pkNL.s3o2
+        R.nl_peakNL_text = sprintf('both at $N_L=%d$', pkNL.s1);
+    else
+        R.nl_peakNL_text = sprintf('at $N_L=%d$ and %d, respectively', pkNL.s1, pkNL.s3o2);
     end
 end
 

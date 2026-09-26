@@ -362,7 +362,7 @@ function fig = fig_lanczos_steps(o, st)
     ylabel(ax2, 'Lanczos time (s)', 'Interpreter', 'latex', 'FontSize', st.fl);
     yl = ylim(ax2);  ylim(ax2, [0 1.6 * yl(2)]);          % free space for the legend
     legend(ax2, {'FP64, $s=1$', 'FP32, $s=1$', 'FP64, $s=3/2$', 'FP32, $s=3/2$'}, ...
-           'Interpreter', 'latex', 'Box', 'off', 'Location', 'northwest', 'FontSize', st.fs, 'NumColumns', 2);
+           'Interpreter', 'latex', 'Box', 'off', 'Location', 'northwest', 'FontSize', st.fs);
     setup_axes(ax2, st); panel_label(ax2, 'b', st);
 end
 
