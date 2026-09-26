@@ -266,6 +266,8 @@ function fig = fig_ghosts(o, st, what)
     tl = tiledlayout(fig, 1, 2, 'TileSpacing', 'compact', 'Padding', 'loose');
     names = {'fp64', 'fp32'};  titles = {'FP64', 'FP32'};
     labs = 'ab';
+    th = [S.fp64.theta(:); S.fp32.theta(:)];
+    thlim = [floor(min(th)) - 2, ceil(max(th)) + 2];      % same energy range in both panels
     for q = 1 : 2
         X = S.(names{q});
         ax = nexttile(tl);
@@ -295,7 +297,7 @@ function fig = fig_ghosts(o, st, what)
                 end
                 xlabel(ax, '$\theta_k$', 'Interpreter', 'latex', 'FontSize', st.fl);
                 ylabel(ax, '$w_k$', 'Interpreter', 'latex', 'FontSize', st.fl);
-                ylim(ax, [1e-20 1]);
+                ylim(ax, [1e-20 1]);  xlim(ax, thlim);
                 legend(ax, {'singleton', 'cluster member', 'cluster total'}, 'Interpreter', 'latex', ...
                        'Box', 'off', 'Location', 'southwest', 'FontSize', st.fs);
         end
@@ -313,12 +315,14 @@ function fig = fig_lanczos_steps(o, st)
     tl = tiledlayout(fig, 1, 2, 'TileSpacing', 'compact', 'Padding', 'loose');
     ax1 = nexttile(tl); ax2 = nexttile(tl);
     leg1 = {}; h1 = [];
+    Tlo = precision_window(o.DataDir);
     for q = 1 : 2
         S = load_study(o, sprintf('study_lanczos_steps_%s.mat', keys{q}));
+        w = S.T_range(:)' >= Tlo;                         % same window as in the text
         NL = S.NL(1:end-1);
-        eC = max(S.dC_trunc(1:end-1, :), [], 2) / max(S.double.C(end, :));
-        eX = max(S.dchi_trunc(1:end-1, :), [], 2) / max(S.double.chi(end, :));
-        fC = max(S.dC_fp32, [], 2) / max(S.double.C(end, :));
+        eC = max(S.dC_trunc(1:end-1, :) .* w, [], 2) / max(S.double.C(end, :));
+        eX = max(S.dchi_trunc(1:end-1, :) .* w, [], 2) / max(S.double.chi(end, :));
+        fC = max(S.dC_fp32 .* w, [], 2) / max(S.double.C(end, :));
         h1(end+1) = semilogy(ax1, NL, floor_log(eC), ['-' mk{q}], 'Color', st.c64, 'MarkerSize', 4, ...
                              'MarkerFaceColor', st.c64, 'LineWidth', st.lwd); hold(ax1, 'on'); %#ok<AGROW>
         h1(end+1) = semilogy(ax1, NL, floor_log(eX), ['--' mk{q}], 'Color', st.c64, 'MarkerSize', 4, ...
@@ -327,15 +331,16 @@ function fig = fig_lanczos_steps(o, st)
                              'LineWidth', st.lwd); %#ok<AGROW>
         leg1 = [leg1, {sprintf('$C$, $%s$', spins{q}), sprintf('$\\chi$, $%s$', spins{q}), ...
                        sprintf('FP32, $C$, $%s$', spins{q})}]; %#ok<AGROW>
-        plot(ax2, S.NL, S.double.t_lanczos, ['-' mk{q}], 'Color', st.c64, 'MarkerSize', 4, ...
+        NLt = S.NL;  if isfield(S, 'NL_time'), NLt = S.NL_time; end
+        plot(ax2, NLt, S.double.t_lanczos, ['-' mk{q}], 'Color', st.c64, 'MarkerSize', 4, ...
              'MarkerFaceColor', st.c64, 'LineWidth', st.lwd); hold(ax2, 'on');
-        plot(ax2, S.NL, S.single.t_lanczos, ['--' mk{q}], 'Color', st.c32, 'MarkerSize', 4, ...
+        plot(ax2, NLt, S.single.t_lanczos, ['--' mk{q}], 'Color', st.c32, 'MarkerSize', 4, ...
              'LineWidth', st.lwd);
     end
     xlabel(ax1, '$N_L$', 'Interpreter', 'latex', 'FontSize', st.fl);
     ylabel(ax1, 'max. deviation (rel.)', 'Interpreter', 'latex', 'FontSize', st.fl);
-    legend(ax1, h1, leg1, 'Interpreter', 'latex', 'Box', 'off', 'Location', 'northeast', ...
-           'FontSize', st.fs - 1, 'NumColumns', 1);
+    lg = legend(ax1, h1, leg1, 'Interpreter', 'latex', 'Box', 'off', 'FontSize', st.fs, 'NumColumns', 3);
+    lg.Layout.Tile = 'south';
     setup_axes(ax1, st); panel_label(ax1, 'a', st);
     xlabel(ax2, '$N_L$', 'Interpreter', 'latex', 'FontSize', st.fl);
     ylabel(ax2, 'Lanczos time (s)', 'Interpreter', 'latex', 'FontSize', st.fl);
@@ -360,7 +365,7 @@ function fig = fig_ed(o, st)
         plot(ax, T, S.gpu_single.(obs{io}), '--', 'Color', st.c32, 'LineWidth', st.lw);
         xlabel(ax, '$T$', 'Interpreter', 'latex', 'FontSize', st.fl);
         ylabel(ax, ylab{io}, 'Interpreter', 'latex', 'FontSize', st.fl);
-        xlim(ax, [0 max(T)]); yl = ylim(ax); ylim(ax, [0 1.1 * yl(2)]);
+        xlim(ax, [0 max(T)]); yl = ylim(ax); ylim(ax, [0 1.5 * yl(2)]);
         legend(ax, {'ED', sprintf('FTLM FP32 ($R=%d$, $N_L=%d$)', S.R, S.NL)}, 'Interpreter', 'latex', ...
                'Box', 'off', 'Location', 'northeast', 'FontSize', st.fs);
         setup_axes(ax, st);

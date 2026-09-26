@@ -69,6 +69,11 @@ different order, see below).
   256 elements. The rounding error of the reductions now grows like
   log2(dim) instead of dim/256, and the sequential GPU pass, which cost
   about 10 % of the time per Lanczos step for dim ~ 10^7-10^8, is gone.
+- Robustness: launch errors of the SpMV and reduction kernels are checked
+  in every Lanczos step; non-finite recursion coefficients (e.g. FP16
+  overflow for couplings far from order 1) stop the run with an error;
+  the shared-memory check of the CR kernel includes the ladder-factor
+  tables.
 - 64-bit vector indexing in all kernels (v1 used 32-bit indices, which
   overflow for dim x B > 2^31; not reached with the v1 default block
   sizes); CUDA errors, including allocation failures, are

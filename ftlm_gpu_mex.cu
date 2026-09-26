@@ -319,6 +319,8 @@ static void reduce_partials(void *dst, int n, int B)
         n = nb;
         TC *t = src; src = buf; buf = t;
     }
+    /* launch errors of the partial-sum kernels and of the tree passes */
+    cuda_check(cudaGetLastError(), "reduction kernels");
     cuda_check(cudaMemcpy(dst, src, B * sizeof(TC), cudaMemcpyDeviceToDevice), "reduce copy");
 }
 
@@ -439,6 +441,7 @@ static void do_block_lanczos(int nlhs, mxArray *plhs[], const mxArray *mV, int M
     for (int j = 0; j < M_lz; j++) {
         /* W = H V */
         launch_spmv<TS, TC>(pw, pv, B);
+        cuda_check(cudaGetLastError(), "spmv kernel");
 
         /* alpha = <v, w> / sigma^2 */
         ftlm_dot_partial<TS, TC><<<rblocks, FTLM_REDUCE_BS>>>(
@@ -463,6 +466,10 @@ static void do_block_lanczos(int nlhs, mxArray *plhs[], const mxArray *mV, int M
         for (int b = 0; b < B; b++) {
             h_beta[b] = ftlm_sqrt(h_beta_sq[b]) / sigma;
             if (!active[b]) { h_scale[b] = (TC)0; continue; }
+            if (!isfinite((double)h_alpha[b]) || !isfinite((double)h_beta[b]))
+                mexErrMsgIdAndTxt("ftlm_gpu:nonfinite",
+                    "Non-finite Lanczos coefficient in step %d (FP16 range exceeded? "
+                    "Rescale the couplings so that |J| is of order 1).", j + 1);
             h_BE[j + (size_t)b * M_lz] = (double)h_beta[b];
             double tj = fabs((double)h_alpha[b]) + (double)h_beta[b]
                       + (double)h_beta_prev[b];
@@ -561,9 +568,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 mexErrMsgIdAndTxt("ftlm_gpu:cfg", "inconsistent CLT/basis sizes.");
         } else {
             g.d_dcum = (int *)upload_int_array(field(cfg, "dcum", true), "dcum", &g.dcum_size);
-            if ((size_t)g.dcum_size * sizeof(int) > 48 * 1024)
+            /* dynamic D_c table plus the static ladder-factor tables of ftlm_spmv
+             * must fit into 48 kB of shared memory per block */
+            size_t lut_bytes = 2 * FTLM_LUT_SIZE * ((g.prec == PREC_DOUBLE) ? sizeof(double) : sizeof(float));
+            if ((size_t)g.dcum_size * sizeof(int) + lut_bytes > 48 * 1024)
                 mexErrMsgIdAndTxt("ftlm_gpu:cfg",
-                    "D_c table (%d entries) exceeds 48 kB of shared memory.", g.dcum_size);
+                    "D_c table (%d entries) plus ladder-factor tables exceed 48 kB of shared memory.", g.dcum_size);
         }
         setup_constants(cfg);
 

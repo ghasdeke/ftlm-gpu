@@ -6,19 +6,24 @@ For the M = 0 sectors of the s = 2 icosahedron and the s = 1/2
 icosidodecahedron (B = 4 chains), measures with CUDA events
 
   t_spmv   one matrix-free SpMV
-  t_step   one full Lanczos step (from the difference of runs with 26 and
-           6 steps), so that t_vec = t_step - t_spmv is the time of the
-           vector operations (two dot products, orthogonalization and
-           rescaling: 8 passes over the B-column vectors)
+  t_vec    the vector operations of one Lanczos step, launched as in
+           GpuLanczos.block_lanczos: dot product <v, w> (2 passes over the
+           B-column vectors), fused orthogonalization and norm (4 passes),
+           rescaling (2 passes), and the tree reductions of the partial sums
 
-and relates them to byte counts per step (element size e):
+and, for reference, the host wall time t_step of one step (difference of
+runs with 26 and 6 steps), which additionally contains the host
+synchronization of the recursion coefficients.  The times are related to
+byte counts per step (element size e):
 
   vector operations   8 dim B e
-  SpMV, no reuse      dim (4 [label, CLT] + 2 B e [input row, output])
-                      + n_off (B e [gathered values] + 8 [CLT block], CLT)
-                      every gathered value counted as a separate access
+  SpMV, requested     dim (4 [label, CLT] + 2 B e [own row, output])
+                      + n_off (B e [gathered values] + 8 [CLT mask + base])
+  SpMV, sectors       as 'requested', but every gather of B values and each
+                      of the two CLT reads occupies whole 32-byte sectors
+                      (no reuse of fetched sectors)
   SpMV, compulsory    dim (4 [label, CLT] + 2 B e) + |CLT|
-                      every array touched once (ideal cache)
+                      every array read once (ideal cache)
 
 n_off is the exact number of off-diagonal matrix elements of the sector.
 The device-to-device copy bandwidth is measured for reference.  Requires
@@ -43,6 +48,7 @@ CuPy (see python/README).
 # ================================================================
 
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -52,7 +58,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 from ftlm_gpu import Model, enumerate_sector, sectors  # noqa: E402
-from ftlm_gpu.gpu import GpuLanczos  # noqa: E402
+from ftlm_gpu.gpu import REDUCE_BS, SPMV_BS, GpuLanczos  # noqa: E402
 
 B = 4
 CASES = [("ico_s2_M0", "clt", "double"), ("ico_s2_M0", "clt", "single"),
@@ -126,6 +132,29 @@ def main():
         V0 = rng.standard_normal((sec.dim, B)).astype(np.float64 if prec == "double" else np.float32)
         eng.block_lanczos(V0, 3)                      # warm-up; leaves normalized vectors
         t_spmv = event_time(lambda: eng._spmv(eng.w, eng.v, B))
+        # vector operations with coefficients that leave the vectors unchanged
+        eng.d_alpha.fill(0)
+        eng.d_beta_prev.fill(0)
+        eng.d_beta.fill(1)
+        ni, Bi = np.int32(sec.dim), np.int32(B)
+        rb, bl = (eng.rblocks,), (eng.blocks,)
+
+        def reduce_passes():
+            src, buf, n = eng.partial, eng.partial2, eng.rblocks
+            while n > 1:
+                nb = (n + REDUCE_BS - 1) // REDUCE_BS
+                eng.f["reduce"]((nb,), (REDUCE_BS,), (buf, src, np.int32(n), Bi))
+                n = nb
+                src, buf = buf, src
+
+        def vec_ops():
+            eng.f["dot"](rb, (REDUCE_BS,), (eng.partial, eng.v, eng.w, ni, Bi))
+            reduce_passes()
+            eng.f["ortho"](rb, (REDUCE_BS,), (eng.w, eng.v, eng.vp, eng.d_alpha, eng.d_beta_prev,
+                                              eng.partial, ni, Bi, np.int32(1)))
+            reduce_passes()
+            eng.f["scale"](bl, (SPMV_BS,), (eng.w, eng.d_beta, ni, Bi))
+        t_vec = event_time(vec_ops, 7)
         tt = {}
         for M in (6, 26):
             cp.cuda.runtime.deviceSynchronize()
@@ -136,18 +165,23 @@ def main():
         e, dim, clt = ELEM[prec], sec.dim, lookup == "clt"
         clt_bytes = 8 * ((int(m.D_full) + 31) // 32) if clt else 0
         vec = 8 * dim * B * e
-        spmv_noreuse = dim * (4 * clt + 2 * B * e) + n_off * (B * e + 8 * clt)
-        spmv_compulsory = dim * (4 * clt + 2 * B * e) + clt_bytes
+        row = dim * (4 * clt + 2 * B * e)
+        spmv_requested = row + n_off * (B * e + 8 * clt)
+        spmv_sectors = row + n_off * (32 * math.ceil(B * e / 32) + 64 * clt)
+        spmv_compulsory = row + clt_bytes
         r = dict(system=key, lookup=lookup, precision=prec, dim=int(dim),
-                 offdiag_per_row=n_off / dim, t_step=t_step, t_spmv=t_spmv,
-                 t_vec=t_step - t_spmv, spmv_fraction=t_spmv / t_step,
-                 vec_GBs=vec / (t_step - t_spmv) / 1e9,
-                 spmv_noreuse_GB=spmv_noreuse / 1e9, spmv_noreuse_GBs=spmv_noreuse / t_spmv / 1e9,
+                 offdiag_per_row=n_off / dim, t_spmv=t_spmv, t_vec=t_vec,
+                 t_step_host=t_step, host_overhead=1 - (t_spmv + t_vec) / t_step,
+                 spmv_fraction=t_spmv / (t_spmv + t_vec),
+                 vec_GBs=vec / t_vec / 1e9,
+                 spmv_noreuse_GB=spmv_requested / 1e9, spmv_noreuse_GBs=spmv_requested / t_spmv / 1e9,
+                 spmv_sectors_GB=spmv_sectors / 1e9, spmv_sectors_GBs=spmv_sectors / t_spmv / 1e9,
                  spmv_compulsory_GB=spmv_compulsory / 1e9,
                  spmv_compulsory_GBs=spmv_compulsory / t_spmv / 1e9)
-        print(f"{key:10s} {lookup} {prec:6s} step {1e3 * t_step:7.1f} ms, SpMV {1e3 * t_spmv:7.1f} ms "
-              f"({100 * r['spmv_fraction']:.0f} %), vector ops {r['vec_GBs']:.0f} GB/s, SpMV "
-              f"{r['spmv_compulsory_GBs']:.0f} GB/s compulsory / {r['spmv_noreuse_GBs']:.0f} GB/s no reuse")
+        print(f"{key:10s} {lookup} {prec:6s} SpMV {1e3 * t_spmv:7.1f} ms, vector ops {1e3 * t_vec:6.1f} ms "
+              f"({r['vec_GBs']:.0f} GB/s), host step {1e3 * t_step:7.1f} ms; SpMV "
+              f"{r['spmv_compulsory_GBs']:.0f} GB/s compulsory / {r['spmv_noreuse_GBs']:.0f} requested / "
+              f"{r['spmv_sectors_GBs']:.0f} sectors")
         info["runs"].append(r)
         eng.free()
         del eng

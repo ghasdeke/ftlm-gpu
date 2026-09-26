@@ -16,8 +16,10 @@ function out = study_precision(varargin)
 %     dodeca_s1o2             dodecahedron s = 1/2 (Fig. 3 e, f), R = 100
 %     icosid_M0               icosidodecahedron s = 1/2, M = 0, R = 8 (Fig. 3 g)
 %
-%   Name-value options: 'Systems', 'Variants', 'OutDir' (default '.').
-%   Output: study_precision_<key>.mat per system.
+%   Name-value options: 'Systems', 'Variants', 'OutDir' (default '.'),
+%   'Suffix' (appended to the file name, e.g. '_cpu' when the CPU variants
+%   run in a separate MATLAB session; see run_cpu_reference).
+%   Output: study_precision_<key><Suffix>.mat per system.
 
 % ================================================================
 % Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
@@ -52,6 +54,7 @@ p = inputParser;
 p.addParameter('Systems', sys_all(:, 1)');
 p.addParameter('Variants', var_all);
 p.addParameter('OutDir', '.');
+p.addParameter('Suffix', '');
 p.parse(varargin{:});
 o = p.Results;
 
@@ -78,7 +81,7 @@ for is = 1 : size(sys_all, 1)
         S.s   = res.model.spins(1);
         S.dim_max = max(res.sector_dims);
         fprintf('  %-13s t = %7.1f s (Lanczos %7.1f s)\n', v, S.(v).t_wall, res.t_lanczos);
-        save(fullfile(o.OutDir, sprintf('study_precision_%s.mat', key)), '-struct', 'S');
+        save(fullfile(o.OutDir, sprintf('study_precision_%s%s.mat', key, o.Suffix)), '-struct', 'S');
     end
     report(S);
     out.(key) = S;

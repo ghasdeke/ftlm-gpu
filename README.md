@@ -57,9 +57,18 @@ Precision (`precision`):
 | `bfloat16` | BF16 | FP32 | GPU |
 
 The 16-bit formats store the Lanczos vectors in 16 bit (halving the vector
-memory and traffic relative to FP32); the vectors are kept at norm
-sqrt(dim) so that their entries stay in the normal FP16 range. The small
-tridiagonal eigenproblems are always solved in FP64 on the host.
+memory relative to FP32); the vectors are kept at norm sqrt(dim) so that
+their entries stay in the normal FP16 range. The small tridiagonal
+eigenproblems are always solved in FP64 on the host.
+
+Accuracy: FP32 is the recommended default; its deviations from FP64 are
+far below the stochastic FTLM error (paper, Sections 3.1-3.5). With 16-bit
+storage the energy resolution is of order u W (u = 2^-11 for FP16, 2^-8
+for BF16; W the spectral width), so FP16 results are reliable only for
+temperatures well above u W, and BF16 is not recommended for
+thermodynamics. For `half`, the couplings should be of order 1 (FP16
+overflows above 65504): rescale J and T together, e.g. use units of the
+largest |J|. A non-finite Lanczos coefficient stops the run with an error.
 
 Kernels:
 
@@ -219,7 +228,8 @@ produced with v2.0.0 by the following scripts:
 | `examples/paper/study_precision.m` | Figs. 1, 3, Table 5: FP64/FP32/FP16/BF16 GPU and FP64/FP32 CPU runs with identical start vectors |
 | `examples/paper/study_seeds.m` | Fig. 2: 50 independent FTLM runs, empirical and theoretical stochastic error, FP32 deviation of single and pooled runs |
 | `examples/paper/study_ghosts.m` | Figs. 4, 5: ghost diagnostic and cluster weights |
-| `examples/paper/study_lanczos_steps.m` | Fig. 6: convergence in the number of Lanczos steps |
+| `examples/paper/study_lanczos_steps.m` | Fig. 6: convergence in the number of Lanczos steps (one run with N_L = 300 per precision; smaller N_L by truncating the recorded Lanczos coefficients, which is identical to separate runs) |
+| `examples/paper/run_cpu_reference.m` | CPU variants of the precision study in a second MATLAB session, in parallel with the GPU studies (started by `run_all_studies`) |
 | `examples/paper/study_ed_decomposition.m` | Fig. 7: error decomposition against exact diagonalization |
 | `examples/paper/study_exact_icosahedron.m` | comparison with the exact heat capacity of the s = 3/2 icosahedron (`examples/paper/data`) |
 | `examples/paper/make_figures.m` | Figs. 1-7 (PDF and 600 dpi PNG) from the study files |

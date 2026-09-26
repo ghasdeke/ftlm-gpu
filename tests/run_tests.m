@@ -15,6 +15,9 @@ function run_tests(varargin)
 %     5. Lanczos breakdown in a degenerate sector (no NaN, early stop)
 %     6. full run: FTLM vs. exact diagonalization (mixed-spin model)
 %     7. input validation
+%     8. large sector (dim = 73,789 > 256^2): Lanczos coefficients of the
+%        CPU and GPU kernels vs. a reference recursion with the explicit
+%        sparse Hamiltonian (multi-pass tree reduction, cascade summation)
 
 % ================================================================
 % Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
@@ -41,7 +44,7 @@ if ~use_gpu
 end
 
 tests = {@test_basis, @test_spmv, @test_lanczos_exact, @test_sum_rule, ...
-         @test_breakdown, @test_ftlm_vs_ed, @test_validation};
+         @test_breakdown, @test_ftlm_vs_ed, @test_validation, @test_large_sector};
 n_fail = 0;
 for k = 1 : numel(tests)
     name = func2str(tests{k});
@@ -247,6 +250,45 @@ function test_validation(~)
     end
     m = ftlm.model(struct('couplings', [1 2 1; 2 1 0.5; 2 3 0; 3 1 2], 's_val', 1));
     assert(isequal(m.couplings, [1 2 1.5; 3 1 2]), 'coupling merge/drop failed');
+end
+
+function test_large_sector(use_gpu)
+% s = 1 icosahedron, M = 0: dim = 73,789 (not a multiple of 256), so the
+% GPU dot products need two tree passes and each CPU thread sums several
+% chunks.  Reference: plain FP64 recursion with the explicit sparse H.
+    m = ftlm.model(struct('geometry', 'ico', 's_val', 1, 'J', 1));
+    secs = ftlm.sectors(m, true);
+    sec = secs(1);
+    basis = ftlm.enumerate_sector(m, sec.A);
+    H = ftlm.hamiltonian(m, basis);
+    rng(7, 'twister');
+    V = randn(sec.dim, 2);
+    nl = 4;
+    AL = zeros(nl, 2);  BE = zeros(nl, 2);
+    for b = 1 : 2
+        v = V(:, b) / norm(V(:, b));  vp = zeros(sec.dim, 1);  beta = 0;
+        for j = 1 : nl
+            w = H * v;  alpha = v' * w;
+            w = w - alpha * v - beta * vp;  beta = norm(w);
+            AL(j, b) = alpha;  BE(j, b) = beta;
+            vp = v;  v = w / beta;
+        end
+    end
+    variants = {'cpu', 'double', 1e-12; 'cpu', 'single', 1e-5};
+    if use_gpu
+        variants = [variants; {'gpu', 'double', 1e-12; 'gpu', 'single', 1e-5; 'gpu', 'half', 1e-2}];
+    end
+    for k = 1 : size(variants, 1)
+        [be, pr, tol] = variants{k, :};
+        cfg = ftlm.kernel_config(m, sec.A, 'clt', pr, 2, basis);
+        f = str2func(sprintf('ftlm_%s_mex', be));
+        f('init', cfg);
+        Vin = V;  if ~strcmp(pr, 'double'), Vin = single(V); end
+        [a, bt] = f('block_lanczos', Vin, nl);
+        f('cleanup');
+        err = max([abs(a(1:nl, :) - AL); abs(bt(1:nl, :) - BE)], [], 'all') / max(abs(AL), [], 'all');
+        assert(err < tol, '%s/%s: relative deviation %.2e > %.0e', be, pr, err, tol);
+    end
 end
 
 function ok = gpu_available()

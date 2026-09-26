@@ -205,8 +205,10 @@ class GpuLanczos:
             if not model.cr_ok:
                 raise ValueError("lookup 'cr': the packed state needs more than 64 bits")
             dcum, ps, as_, dim = _basis.cr_tables(model, A)
-            if dcum.size * 4 > 48 * 1024:
-                raise ValueError("D_c table exceeds 48 kB of shared memory")
+            # dynamic D_c table plus the static ladder-factor tables of ftlm_spmv
+            lut_bytes = 2 * LUT_SIZE * (8 if precision == "double" else 4)
+            if dcum.size * 4 + lut_bytes > 48 * 1024:
+                raise ValueError("D_c table plus ladder-factor tables exceed 48 kB of shared memory")
             self.dcum = cp.asarray(dcum)
             self.dcum_size = int(dcum.size)
             self.dim = dim
@@ -341,6 +343,10 @@ class GpuLanczos:
                             (pw, pv, pvp, self.d_alpha, self.d_beta_prev, self.partial,
                              ni, Bi, np.int32(1 if j > 0 else 0)))
             beta = (np.sqrt(reduce_to_host(self.d_beta)) / sigma).astype(tc)
+            if not (np.all(np.isfinite(alpha[active])) and np.all(np.isfinite(beta[active]))):
+                raise FloatingPointError(
+                    f"non-finite Lanczos coefficient in step {j + 1} (FP16 range exceeded? "
+                    "Rescale the couplings so that |J| is of order 1)")
             scale = np.zeros(B, dtype=tc)
             for b in range(B):
                 if not active[b]:

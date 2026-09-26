@@ -12,7 +12,7 @@ function S = study_exact_icosahedron(varargin)
 %   deviations |C_x - C_FP64| on T in [TMin, TMax].
 %
 %   Name-value options: 'DataDir' (study_precision output, default '.'),
-%   'TMin' (0.02), 'TMax' (5).
+%   'TMin' (0.005), 'TMax' (5).
 
 % ================================================================
 % Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
@@ -33,7 +33,7 @@ function S = study_exact_icosahedron(varargin)
 
 p = inputParser;
 p.addParameter('DataDir', '.');
-p.addParameter('TMin', 0.02);
+p.addParameter('TMin', 0.005);
 p.addParameter('TMax', 5);
 p.parse(varargin{:});
 o = p.Results;

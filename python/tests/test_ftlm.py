@@ -167,6 +167,36 @@ class TestLanczos(unittest.TestCase):
             self.assertLessEqual(r["nsteps"].max(), n_dist + 1, f"{be}/{prec}")
             self.assertAlmostEqual(r["w"].sum() / sec.dim, 1.0, places=5)
 
+    @unittest.skipUnless(HAVE_GPU, "no GPU")
+    def test_large_sector_reduction(self):
+        # s = 1 icosahedron, M = 0: dim = 73,789 > 256^2 (two tree passes)
+        from ftlm_gpu.gpu import GpuLanczos
+        m = Model.preset("ico", s=1.0)
+        sec = sectors(m, True)[0]
+        b = enumerate_sector(m, sec.A)
+        H = hamiltonian(m, b)
+        V = np.random.default_rng(7).standard_normal((sec.dim, 2))
+        nl = 4
+        AL = np.zeros((nl, 2))
+        BE = np.zeros((nl, 2))
+        for c in range(2):
+            v = V[:, c] / np.linalg.norm(V[:, c])
+            vp = np.zeros(sec.dim)
+            beta = 0.0
+            for j in range(nl):
+                w = H @ v
+                alpha = v @ w
+                w = w - alpha * v - beta * vp
+                beta = np.linalg.norm(w)
+                AL[j, c], BE[j, c] = alpha, beta
+                vp, v = v, w / beta
+        for prec, tol in (("double", 1e-12), ("single", 1e-5), ("half", 1e-2)):
+            eng = GpuLanczos(m, sec.A, "clt", prec, 2, b)
+            a, bt, _ = eng.block_lanczos(V if prec == "double" else V.astype(np.float32), nl)
+            eng.free()
+            err = max(np.abs(a[:nl] - AL).max(), np.abs(bt[:nl] - BE).max()) / np.abs(AL).max()
+            self.assertLess(err, tol, prec)
+
     def test_ftlm_vs_ed(self):
         # statistical test: stochastic error of FTLM with R_eff = min(R, dim)
         # random vectors stays below ~3 % for T >= 0.5 (larger at lower T)
