@@ -6,24 +6,29 @@ message: >-
   If you use this software, please cite both the software (this CITATION
   file) and the accompanying paper (see preferred-citation below).
 type: software
-title: "GPU-Accelerated FTLM for Heisenberg Spin Clusters"
+title: "ftlm-gpu: GPU-accelerated finite-temperature Lanczos method for spin Hamiltonians"
 abstract: >-
   Matrix-free GPU implementation of the Finite-Temperature Lanczos Method
-  for Heisenberg spin clusters with uniform nearest-neighbor exchange
-  coupling, with sector decomposition by total S^z and a block-Lanczos
-  sweep over random vectors. Computes the specific heat C(T), magnetic
-  susceptibility chi(T), and the effective partition function Z_eff(T)
-  on a user-supplied temperature grid. The production path runs in
-  single precision on the GPU (CUDA); a double-precision OpenMP
-  CPU path is available as a reference.
-version: "1.1.1"
-date-released: "2026-07-11"
+  (FTLM) for isotropic spin Hamiltonians H = sum_c J_c s_i . s_j with an
+  arbitrary list of pairwise couplings and arbitrary (mixed) local spins,
+  with sector decomposition by total S^z and a block-Lanczos sweep over
+  random vectors. Two state-to-index maps (compressed lookup table,
+  combinatorial ranking) and selectable precision (FP64, FP32, FP16/BF16
+  storage) on the GPU (CUDA); an OpenMP CPU path (FP64/FP32). Computes
+  the heat capacity C(T), the magnetic susceptibility chi(T) and the
+  effective partition function Z_eff(T). MATLAB (MEX) and Python (CuPy)
+  front ends share the same CUDA kernels.
+version: "2.0.0"
+date-released: "2026-09-26"   # update on release
 license: Apache-2.0
 repository-code: "https://github.com/ghasdeke/ftlm-gpu"
-doi: "10.5281/zenodo.20378647"   # Zenodo archive of the software (see paper)
+doi: "10.5281/zenodo.20378647"   # Zenodo archive; replace by the v2.0.0 version DOI on release
 keywords:
   - Heisenberg model
   - spin cluster
+  - mixed spins
+  - Python
+  - CuPy
   - exact diagonalization
   - Finite-Temperature Lanczos Method
   - block Lanczos

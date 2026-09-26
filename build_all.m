@@ -15,92 +15,84 @@
 %  See the License for the specific language governing permissions and
 %  limitations under the License.
 %  ================================================================
-%  Master build script for the FTLM release kernels.
+%  Build script for the MATLAB MEX kernels.
 %
-%  Compiles the three kernels of the OSS release:
+%    1. ftlm_gpu_mex.cu   GPU block Lanczos (CLT and CR lookup;
+%                         FP64, FP32, FP16, BF16 storage).  Device code
+%                         in cuda/ftlm_kernels.cuh (shared with Python).
+%    2. ftlm_cpu_mex.cpp  CPU block Lanczos (CLT lookup; FP64, FP32;
+%                         OpenMP)
 %
-%    1. cuda_lanczos_clut_block.cu        (GPU, FP32, CLT block Lanczos)
-%    2. cuda_lanczos_crank_Sr_general.cu  (GPU, FP32, CRank block Lanczos)
-%    3. cpu_lanczos_omp.c                 (CPU, FP64, OpenMP, B=8)
-%
-%  This script performs NO numerical verification.  After successful
-%  compilation only a harmless cpu_lanczos_omp('info') call is issued,
-%  which returns the number of OpenMP threads -- without MEX
-%  initialization, without any GPU call.  To verify that the kernels
-%  work end-to-end on a real physics problem, run ftlm_observables.m
-%  afterwards.
+%  The GPU kernel is skipped (with a warning) if the Parallel Computing
+%  Toolbox / mexcuda is not available; the CPU backend then still works
+%  (backend = 'cpu').
 %
 %  Prerequisites:
 %    - MATLAB R2022a or newer
-%    - Parallel Computing Toolbox (for mexcuda)
-%    - NVIDIA CUDA Toolkit (compatible with the MATLAB CUDA version)
-%    - Windows: MSVC with OpenMP support, configured via "mex -setup C++"
-%    - Linux:   GCC with OpenMP support
+%    - GPU: Parallel Computing Toolbox (mexcuda), NVIDIA GPU with compute
+%      capability >= 7.0
+%    - CPU: C++ compiler with OpenMP (Windows: MSVC via "mex -setup C++";
+%      Linux: GCC >= 9 or Clang >= 12)
 %
-%  After a successful run:  launch ftlm_observables to compute the
-%  finite-temperature observables (and optionally cross-check against a
-%  CPU FP64 reference).  ftlm_observables takes the path to an input
-%  file as its only argument, e.g.
+%  After building, run the tests (tests/run_tests.m) and an example:
 %      ftlm_observables('input_ico_s1_example.m')
 %  ================================================================
 
 clear functions; clear mex;
+root = fileparts(mfilename('fullpath'));
+old_dir = cd(root);
+cleanup_dir = onCleanup(@() cd(old_dir));
 
-fprintf('\n=== Compilation of release kernels ===\n\n');
+fprintf('\n=== Compilation of the FTLM kernels ===\n\n');
 
-%% 1.  CUDA: cuda_lanczos_clut_block.cu
-fprintf('Compiling cuda_lanczos_clut_block.cu ...\n');
-try
-    mexcuda('cuda_lanczos_clut_block.cu');
-    fprintf('  Compiled successfully.\n\n');
-catch ME
-    fprintf('  ERROR: %s\n', ME.message);
-    fprintf('  Hint: check "mex -setup C++" and the CUDA installation.\n');
-    rethrow(ME);
+%% 1.  GPU kernel
+fprintf('Compiling ftlm_gpu_mex.cu ...\n');
+if exist('mexcuda', 'file') == 2
+    try
+        mexcuda('ftlm_gpu_mex.cu');
+        fprintf('  Compiled successfully.\n\n');
+    catch ME
+        fprintf('  ERROR: %s\n', ME.message);
+        fprintf('  Hint: check "mex -setup C++" and the CUDA installation.\n');
+        rethrow(ME);
+    end
+else
+    warning('build_all:NoMexcuda', ...
+        'mexcuda not found (Parallel Computing Toolbox missing): GPU kernel skipped.');
 end
 
-%% 2.  CUDA: cuda_lanczos_crank_Sr_general.cu
-fprintf('Compiling cuda_lanczos_crank_Sr_general.cu ...\n');
-try
-    mexcuda('cuda_lanczos_crank_Sr_general.cu');
-    fprintf('  Compiled successfully.\n\n');
-catch ME
-    fprintf('  ERROR: %s\n', ME.message);
-    rethrow(ME);
-end
-
-%% 3.  CPU: cpu_lanczos_omp.c  (OpenMP, platform-specific)
-fprintf('Compiling cpu_lanczos_omp.c (with OpenMP) ...\n');
+%% 2.  CPU kernel (OpenMP, platform-specific flags)
+fprintf('Compiling ftlm_cpu_mex.cpp (with OpenMP) ...\n');
 try
     if ispc
-        % Windows / MSVC
-        mex('cpu_lanczos_omp.c', 'COMPFLAGS=$COMPFLAGS /openmp');
-    elseif isunix
-        % Linux / macOS / GCC or Clang
-        mex('cpu_lanczos_omp.c', ...
-            'CFLAGS=$CFLAGS -fopenmp', ...
-            'LDFLAGS=$LDFLAGS -fopenmp');
+        mex('ftlm_cpu_mex.cpp', 'COMPFLAGS=$COMPFLAGS /openmp');
+    elseif ismac
+        % Apple clang needs libomp (e.g. Homebrew) for OpenMP support
+        mex('ftlm_cpu_mex.cpp', 'CXXFLAGS=$CXXFLAGS -Xpreprocessor -fopenmp', ...
+            'LDFLAGS=$LDFLAGS -lomp');
     else
-        error('Unsupported platform.');
+        mex('ftlm_cpu_mex.cpp', 'CXXFLAGS=$CXXFLAGS -fopenmp', ...
+            'LDFLAGS=$LDFLAGS -fopenmp');
     end
     fprintf('  Compiled successfully.\n\n');
 catch ME
     fprintf('  ERROR: %s\n', ME.message);
     fprintf('  Hint: check the OpenMP support of your compiler.\n');
-    fprintf('  Note: if cpu_lanczos_omp was already used in this MATLAB\n');
-    fprintf('  session, the MEX file is locked in memory (deliberately, see\n');
-    fprintf('  the source header). Restart MATLAB and re-run build_all.\n');
+    fprintf('  Note: if ftlm_cpu_mex was already used in this MATLAB session,\n');
+    fprintf('  the MEX file is locked in memory (deliberately, see the source\n');
+    fprintf('  header). Restart MATLAB and re-run build_all.\n');
     rethrow(ME);
 end
 
-%% 4.  Harmless sanity check  (no init, no GPU call)
+%% 3.  Sanity check (no initialization, no GPU call)
 fprintf('=== Sanity check ===\n');
 try
-    n_omp = cpu_lanczos_omp('info');
-    fprintf('  cpu_lanczos_omp reports %d OpenMP threads.\n', n_omp);
+    n_omp = ftlm_cpu_mex('info');
+    fprintf('  ftlm_cpu_mex reports %d OpenMP threads.\n', n_omp);
 catch ME
-    fprintf('  WARNING: cpu_lanczos_omp(''info'') failed: %s\n', ME.message);
+    fprintf('  WARNING: ftlm_cpu_mex(''info'') failed: %s\n', ME.message);
 end
 
 fprintf('\n=== Build complete. ===\n');
-fprintf('Next step:  >> ftlm_observables(''input_ico_s1_example.m'')\n\n');
+fprintf('Next steps:  >> cd tests; run_tests\n');
+fprintf('             >> ftlm_observables(''input_ico_s1_example.m'')\n\n');

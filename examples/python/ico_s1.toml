@@ -1,0 +1,16 @@
+# s = 1 icosahedron, uniform nearest-neighbor coupling (cf. input_ico_s1_example.m)
+#   python -m ftlm_gpu ico_s1.toml
+geometry = "ico"
+s_val    = 1.0
+J        = 1.0
+R        = 50
+M_lz     = 100
+T_range  = { logspace = [-2, 1, 100] }
+
+# optional (defaults shown)
+backend           = "gpu"      # "gpu" | "cpu" (explicit sparse matrix, small systems)
+precision         = "single"   # "single" | "double" | "half" | "bfloat16"
+lookup            = "clt"      # "clt" | "cr"
+use_cpu_reference = false
+ed_thresh         = 1000
+seed              = 0

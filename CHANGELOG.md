@@ -1,5 +1,75 @@
 # Changelog
 
+## v2.0.0 (unreleased)
+
+Feature release accompanying the revised paper. The FP32 GPU results of
+v1 are reproduced bit for bit (CLT kernel, uniform model, `seed = 0`,
+`ed_thresh = 0`).
+
+### Added
+- **General isotropic spin Hamiltonians**
+  `H = sum_c J_c s_{i_c} . s_{j_c}` with an arbitrary list of pairwise
+  couplings `couplings = [i, j, J_ij]` (any pairs, not restricted to
+  nearest neighbors, any signs; up to 512 couplings). The predefined
+  geometries with a uniform nearest-neighbor `J` remain available.
+- **Mixed spins:** a vector `spins` of local spins s_i (integers or
+  half-integers up to 15/2). Mixed-radix basis encoding for the CLT and
+  site-dependent digit ranges in the combinatorial ranking; sectors with
+  half-integer M are handled.
+- **Selectable precision:** GPU `precision = 'double' | 'single' |
+  'half' | 'bfloat16'` (the 16-bit formats are storage formats with FP32
+  arithmetic; vectors are stored with norm sqrt(dim) to stay in the
+  normal FP16 range) and CPU `precision`/`cpu_precision = 'double' |
+  'single'`.
+- **Python front end** (`python/ftlm_gpu`, `pip install .[cuda12]`): no
+  MATLAB license needed. The CUDA kernels are compiled at run time with
+  NVRTC through CuPy; the same device code (`cuda/ftlm_kernels.cuh`) is
+  used by the MATLAB MEX gateway, and both front ends produce identical
+  Lanczos coefficients for identical start vectors. Command line:
+  `python -m ftlm_gpu input.toml`.
+- `backend = 'cpu'` runs the whole calculation with the OpenMP kernel
+  (no GPU required); `lookup = 'cr'` selects the combinatorial-ranking
+  GPU kernel in `ftlm_observables`.
+- `seed` option for statistically independent start-vector sets
+  (multi-seed error analysis); `save_ritz` stores Ritz values, weights and
+  Lanczos coefficients per sector.
+- Test suites `tests/run_tests.m` and `python/tests` (SpMV of every
+  kernel variant vs. an explicit sparse Hamiltonian with random
+  couplings and mixed spins, CLT/CR order, exact Gauss quadrature for
+  full Krylov spaces, weight sum rule, Lanczos breakdown, FTLM vs. ED).
+- `examples/benchmark_table3.m`: CPU/GPU x FP64/FP32/FP16/BF16 x CLT/CR
+  timings.
+
+### Changed
+- One GPU MEX file `ftlm_gpu_mex` (replaces `cuda_lanczos_clut_block`
+  and `cuda_lanczos_crank_Sr_general`) and one CPU MEX file
+  `ftlm_cpu_mex` (replaces `cpu_lanczos_omp`); MATLAB helper functions
+  in the package `+ftlm`. `build_all` builds both.
+- **Lanczos termination per chain:** a chain stops when its Krylov
+  space is exhausted (`beta_j <= c u ||T_j||_1`, c = 64 for FP64/FP32,
+  8 for FP16/BF16), independently of the other chains of the block
+  (v1: GPU stopped only when all chains had `beta < 1e-6`, the CPU
+  stopped all chains as soon as one had `beta < 1e-14`). N_L and R are
+  capped at the sector dimension as before.
+- Default `ed_thresh = 1000` (v1: 0): small sectors are diagonalized
+  exactly.
+- The combinatorial ranking uses the digit convention a = m + s of the
+  CLT, so both lookup strategies act on identically ordered vectors.
+- Basis enumeration by a site-by-site construction, O(N dim) instead of
+  a scan over the full label space.
+- CPU kernel: pointer swap instead of vector copies, deterministic
+  reductions (thread partials summed in thread order).
+- 64-bit vector indexing in all kernels (v1 used 32-bit indices, which
+  overflow for dim x B > 2^31; not reached with the v1 default block
+  sizes); CUDA errors, including allocation failures, are
+  reported; the GPU block size is reduced automatically if the sector
+  does not fit into free device memory.
+
+### Removed
+- `cuda_lanczos_clut_block.cu`, `cuda_lanczos_crank_Sr_general.cu`,
+  `cpu_lanczos_omp.c`, `examples/benchmark_ico_v1.m`,
+  `examples/benchmark_icosid_v1.m` (superseded; available in v1.1.1).
+
 ## v1.1.1 (2026-07-11)
 
 Documentation/usability release. No changes to the physics, the
