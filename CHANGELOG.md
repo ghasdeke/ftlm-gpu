@@ -2,9 +2,9 @@
 
 ## v2.0.0 (unreleased)
 
-Feature release accompanying the revised paper. The FP32 GPU results of
-v1 are reproduced bit for bit (CLT kernel, uniform model, `seed = 0`,
-`ed_thresh = 0`).
+Feature release accompanying the revised paper. The results of v1 are
+reproduced up to rounding (the dot products are now summed in a
+different order, see below).
 
 ### Added
 - **General isotropic spin Hamiltonians**
@@ -39,6 +39,10 @@ v1 are reproduced bit for bit (CLT kernel, uniform model, `seed = 0`,
   full Krylov spaces, weight sum rule, Lanczos breakdown, FTLM vs. ED).
 - `examples/benchmark_table3.m`: CPU/GPU x FP64/FP32/FP16/BF16 x CLT/CR
   timings.
+- `examples/paper/`: the scripts that produce all figures, tables and
+  quoted numbers of the revised paper (precision, multi-seed, ghost,
+  Lanczos-step, exact-diagonalization and memory-traffic studies;
+  `run_all_studies`, `make_figures`, `summarize_results`).
 
 ### Changed
 - One GPU MEX file `ftlm_gpu_mex` (replaces `cuda_lanczos_clut_block`
@@ -59,6 +63,12 @@ v1 are reproduced bit for bit (CLT kernel, uniform model, `seed = 0`,
   a scan over the full label space.
 - CPU kernel: pointer swap instead of vector copies, deterministic
   reductions (thread partials summed in thread order).
+- **Dot products:** the GPU block partial sums are reduced by a
+  multi-pass tree (v1: one thread per chain summed all dim/256 block
+  results sequentially), the CPU uses cascade summation over chunks of
+  256 elements. The rounding error of the reductions now grows like
+  log2(dim) instead of dim/256, and the sequential GPU pass, which cost
+  about 10 % of the time per Lanczos step for dim ~ 10^7-10^8, is gone.
 - 64-bit vector indexing in all kernels (v1 used 32-bit indices, which
   overflow for dim x B > 2^31; not reached with the v1 default block
   sizes); CUDA errors, including allocation failures, are

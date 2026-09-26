@@ -6,7 +6,9 @@ function out = study_seeds(varargin)
 %   FP64 with the same start vectors, and evaluates
 %
 %     sigma_emp(T)   empirical standard deviation over the N_s FP32 runs
-%     sigma_theo(T)  O / sqrt(Z_eff) of the pooled estimate
+%     sigma_theo(T)  O / sqrt(R Z_eff), the expected standard deviation of a
+%                    single run with R random vectors per sector (Ref. [13]),
+%                    O and Z_eff from the pooled estimate
 %     Delta_k(T)     |O_32 - O_64| of the estimate pooled over k seeds
 %                    (R_eff = k R), k = 1, 2, 4, ..., N_64
 %     R*             break-even number of random vectors,
@@ -18,7 +20,7 @@ function out = study_seeds(varargin)
 %
 %   Name-value options:
 %     'Systems' {'ico_s1', 'ico_s3o2'}   'NSeeds' 50   'NSeeds64' 50 (ico_s1)
-%     / 10 (ico_s3o2)   'OutDir' '.'
+%     / 16 (ico_s3o2)   'OutDir' '.'
 %   Output: study_seeds_<key>.mat
 
 % ================================================================
@@ -48,14 +50,14 @@ p.addParameter('OutDir', '.');
 p.parse(varargin{:});
 o = p.Results;
 
-T = linspace(0.02, 10, 500);
+T = unique([linspace(0.005, 0.2, 196), linspace(0.2, 10, 491)]);
 R = 100;
 out = struct();
 for ks = 1 : numel(o.Systems)
     key = o.Systems{ks};
     switch key
         case 'ico_s1',   mopts = struct('geometry', 'ico', 's_val', 1.0, 'J', 1); n64 = o.NSeeds;
-        case 'ico_s3o2', mopts = struct('geometry', 'ico', 's_val', 1.5, 'J', 1); n64 = 10;
+        case 'ico_s3o2', mopts = struct('geometry', 'ico', 's_val', 1.5, 'J', 1); n64 = 16;
         otherwise, error('unknown system %s', key);
     end
     if ~isempty(o.NSeeds64), n64 = o.NSeeds64; end
@@ -91,8 +93,8 @@ for ks = 1 : numel(o.Systems)
 
     % pooled estimates
     [S.C_pool, S.chi_pool, Zp] = pooled(runs32(1:Ns), T);
-    S.sigma_theo_C   = S.C_pool ./ sqrt(Zp);
-    S.sigma_theo_chi = S.chi_pool ./ sqrt(Zp);
+    S.sigma_theo_C   = S.C_pool ./ sqrt(R * Zp);
+    S.sigma_theo_chi = S.chi_pool ./ sqrt(R * Zp);
 
     % FP32 - FP64 difference of pooled estimates, k = 1, 2, 4, ...
     ks_list = unique([2 .^ (0 : floor(log2(n64))), n64]);

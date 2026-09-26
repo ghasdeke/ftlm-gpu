@@ -1,7 +1,7 @@
 function out = study_precision(varargin)
 %STUDY_PRECISION  Same FTLM calculation in all precisions (paper Figs. 1, 3).
 %   OUT = STUDY_PRECISION() runs, for each system, the FTLM calculation
-%   with identical start vectors (seed = 0, ed_thresh = 0 as in the paper)
+%   with identical start vectors (seed = 0, all sectors by FTLM: ed_thresh = 0)
 %   with the variants
 %       GPU FP64, GPU FP32, GPU FP16, GPU BF16   (CLT kernel)
 %       CPU FP64, CPU FP32                      (OpenMP kernel)
@@ -38,14 +38,14 @@ function out = study_precision(varargin)
 
 addpath(fileparts(fileparts(fileparts(mfilename('fullpath')))));
 
-T_std = linspace(0.02, 10, 500);
+T_std = unique([linspace(0.005, 0.2, 196), linspace(0.2, 10, 491)]);
 sys_all = {
     'ico_s1',      struct('geometry', 'ico',    's_val', 1.0, 'J', 1), false, 100, T_std;
     'ico_s3o2',    struct('geometry', 'ico',    's_val', 1.5, 'J', 1), false, 100, T_std;
     'ring12_s1',   struct('geometry', 'ring', 'N_ring', 12, 's_val', 1.0, 'J', 1), false, 100, T_std;
     'ring20_s1o2', struct('geometry', 'ring', 'N_ring', 20, 's_val', 0.5, 'J', 1), false, 100, T_std;
     'dodeca_s1o2', struct('geometry', 'dodeca', 's_val', 0.5, 'J', 1), false, 100, T_std;
-    'icosid_M0',   struct('geometry', 'icosid', 's_val', 0.5, 'J', 1), true, 8, linspace(0.02, 2, 400)};
+    'icosid_M0',   struct('geometry', 'icosid', 's_val', 0.5, 'J', 1), true, 8, unique([linspace(0.005, 0.2, 196), linspace(0.2, 2, 181)])};
 var_all = {'gpu_double', 'gpu_single', 'gpu_half', 'gpu_bfloat16', 'cpu_double', 'cpu_single'};
 
 p = inputParser;
@@ -72,8 +72,11 @@ for is = 1 : size(sys_all, 1)
         opts.ed_thresh = 0;  opts.seed = 0;  opts.verbose = false;
         t0 = tic;
         res = ftlm.run(opts);
-        S.(v) = struct('C', res.C_T, 'chi', res.chi_T, 'Z', res.Z_eff, ...
+        S.(v) = struct('C', res.C_T, 'chi', res.chi_T, 'Z', res.Z_eff, 'E0', res.E0, ...
                        't_wall', toc(t0), 't_lanczos', res.t_lanczos);
+        S.N_B = size(res.model.couplings, 1);
+        S.s   = res.model.spins(1);
+        S.dim_max = max(res.sector_dims);
         fprintf('  %-13s t = %7.1f s (Lanczos %7.1f s)\n', v, S.(v).t_wall, res.t_lanczos);
         save(fullfile(o.OutDir, sprintf('study_precision_%s.mat', key)), '-struct', 'S');
     end
@@ -85,10 +88,11 @@ end
 function report(S)
     if ~isfield(S, 'gpu_double'), return; end
     ref = S.gpu_double;
-    fn = setdiff(fieldnames(S), {'key', 'T_range', 'R', 'M_lz', 'only_M0', 'gpu_double'});
+    fn = setdiff(fieldnames(S), {'gpu_double'});
     fprintf('  max_T |dC| / max C,  max_T |dchi| / max chi   (reference: GPU FP64)\n');
     for k = 1 : numel(fn)
         x = S.(fn{k});
+        if ~isstruct(x), continue; end
         dC = max(abs(x.C - ref.C)) / max(ref.C);
         dX = 0;
         if max(ref.chi) > 0, dX = max(abs(x.chi - ref.chi)) / max(ref.chi); end

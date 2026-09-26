@@ -48,7 +48,7 @@ p.addParameter('OutDir', '.');
 p.parse(varargin{:});
 o = p.Results;
 
-T = linspace(0.02, 10, 500);
+T = unique([linspace(0.005, 0.2, 196), linspace(0.2, 10, 491)]);
 out = struct();
 for ks = 1 : numel(o.Systems)
     key = o.Systems{ks};

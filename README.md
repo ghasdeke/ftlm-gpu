@@ -208,17 +208,31 @@ the Lanczos breakdown handling, and FTLM against exact diagonalization.
 
 ## Reproducing the paper
 
-The `examples/` directory contains the drivers used for the paper:
+All numbers, figures and tables of the paper (revised version) were
+produced with v2.0.0 by the following scripts:
 
-- `benchmark_table3.m` — timings of all kernel variants (CPU/GPU x
-  FP64/FP32/FP16/BF16 x CLT/CR) for the icosahedron and
-  icosidodecahedron workloads of the scaling study.
-- `plot_paperfig1_v2.m` — Figure 1 (C(T), chi(T), FP32 vs. FP64) from a
-  `.mat` file produced by `ftlm_observables` with `use_cpu_reference`.
+| Script | Content |
+|---|---|
+| `examples/benchmark_table3.m` | Table 3: timings of all kernel variants (CPU/GPU x FP64/FP32/FP16/BF16 x CLT/CR, single-vector runs) for the icosahedron and icosidodecahedron workloads; run it on an otherwise idle machine |
+| `examples/paper/memory_traffic.py` | memory-traffic analysis of Section 3.4 (SpMV and vector operations timed separately; Python front end) |
+| `examples/paper/run_all_studies.m` | runs the studies below and `make_figures` (about 4.5 h on an RTX 4000 SFF Ada) |
+| `examples/paper/study_precision.m` | Figs. 1, 3, Table 5: FP64/FP32/FP16/BF16 GPU and FP64/FP32 CPU runs with identical start vectors |
+| `examples/paper/study_seeds.m` | Fig. 2: 50 independent FTLM runs, empirical and theoretical stochastic error, FP32 deviation of single and pooled runs |
+| `examples/paper/study_ghosts.m` | Figs. 4, 5: ghost diagnostic and cluster weights |
+| `examples/paper/study_lanczos_steps.m` | Fig. 6: convergence in the number of Lanczos steps |
+| `examples/paper/study_ed_decomposition.m` | Fig. 7: error decomposition against exact diagonalization |
+| `examples/paper/study_exact_icosahedron.m` | comparison with the exact heat capacity of the s = 3/2 icosahedron (`examples/paper/data`) |
+| `examples/paper/make_figures.m` | Figs. 1-7 (PDF and 600 dpi PNG) from the study files |
+| `examples/paper/summarize_results.m` | the numbers quoted in the text and the rows of Tables 3 and 5 (JSON) |
 
-Figures 1-3 of the paper use `R = 100`, `M_lz = 100` and `ed_thresh = 0`
-(`seed = 0`); with these settings v2.0.0 reproduces the FP32 GPU results
-of v1 bit for bit.
+The precision studies use `R = 100`, `M_lz = 100`, `ed_thresh = 0` and
+`seed = 0` (start vectors drawn in FP64 from `rng(dim, 'twister')` and
+rounded to the storage precision). `plot_paperfig1_v2.m` plots C(T) and
+chi(T) of a single `ftlm_observables` result with `use_cpu_reference`.
+
+Because the dot products are now reduced by a tree (GPU) or a cascade
+(CPU) summation, v2.0.0 reproduces the v1 results only up to rounding
+(relative deviations of order 10^-7 in FP32), not bit for bit.
 
 ## Hardware-specific tuning
 

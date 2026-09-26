@@ -462,18 +462,30 @@ __global__ void ftlm_dot_partial(TC * __restrict__ partial,
     }
 }
 
-/* result[b] = sum_i partial[i * B + b] */
+/* One pass of a tree reduction of partial sums (interleaved, n x B):
+ * out[blk * B + b] = sum of in[i * B + b] over the FTLM_REDUCE_BS values
+ * i of block blk.  Repeated passes reduce D values with O(log2 D)
+ * rounding error growth (instead of O(D / FTLM_REDUCE_BS) for a
+ * sequential sum of the block results). */
 template <typename TC>
-__global__ void ftlm_reduce_partial(TC * __restrict__ result,
-                                    const TC * __restrict__ partial,
-                                    int n_blocks, int B)
+__global__ void ftlm_reduce_tree(TC * __restrict__ out,
+                                 const TC * __restrict__ in,
+                                 int n, int B)
 {
-    int b = threadIdx.x;
-    if (b >= B) return;
-    TC sum = (TC)0;
-    for (int i = 0; i < n_blocks; i++)
-        sum += partial[i * B + b];
-    result[b] = sum;
+    __shared__ TC sdata[FTLM_REDUCE_BS];
+    int tid = threadIdx.x;
+    int i   = blockIdx.x * blockDim.x + threadIdx.x;
+    for (int b = 0; b < B; b++) {
+        sdata[tid] = (i < n) ? in[(ftlm_i64)i * B + b] : (TC)0;
+        __syncthreads();
+        for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+            if (tid < s) sdata[tid] += sdata[tid + s];
+            __syncthreads();
+        }
+        if (tid == 0)
+            out[blockIdx.x * B + b] = sdata[0];
+        __syncthreads();
+    }
 }
 
 /* W -= alpha[b] V (- beta_prev[b] Vp), partial sums of ||W||^2.

@@ -63,7 +63,9 @@ res.C_T     = C_T;
 res.chi_T   = chi_T;
 res.Z_eff   = Z_eff;
 
-res.C_T_cpu = [];  res.chi_T_cpu = [];  res.Z_eff_cpu = [];
+res.E0      = min(main.E);         % lowest Ritz value / eigenvalue
+
+res.C_T_cpu = [];  res.chi_T_cpu = [];  res.Z_eff_cpu = [];  res.E0_cpu = NaN;
 res.t_wall_cpu = NaN;
 if opts.use_cpu_reference
     ref_opts = opts;
@@ -77,6 +79,7 @@ if opts.use_cpu_reference
     [res.C_T_cpu, res.chi_T_cpu, res.Z_eff_cpu] = ...
         ftlm.observables(ref.E, ref.w, ref.M, opts.T_range);
     res.t_wall_cpu = ref.t_wall;
+    res.E0_cpu     = min(ref.E);
     denom = max(abs(res.C_T_cpu));
     rel = 0;
     if denom > 0, rel = max(abs(res.C_T - res.C_T_cpu)) / denom; end

@@ -109,7 +109,7 @@ def _module(prec):
         "import_d": f"ftlm_import<{ts}, {tc}, double>",
         "export_d": f"ftlm_export<{ts}, {tc}, double>",
         "dot": f"ftlm_dot_partial<{ts}, {tc}>",
-        "reduce": f"ftlm_reduce_partial<{tc}>",
+        "reduce": f"ftlm_reduce_tree<{tc}>",
         "ortho": f"ftlm_ortho_norm_partial<{ts}, {tc}>",
         "scale": f"ftlm_scale<{ts}, {tc}>",
     }
@@ -232,6 +232,7 @@ class GpuLanczos:
         self.rblocks = (n + REDUCE_BS - 1) // REDUCE_BS
         self.blocks = (n + SPMV_BS - 1) // SPMV_BS
         self.partial = cp.empty(self.rblocks * B, dtype=self.tc)
+        self.partial2 = cp.empty(((self.rblocks + REDUCE_BS - 1) // REDUCE_BS) * B, dtype=self.tc)
         self.d_alpha = cp.empty(MAX_B, dtype=self.tc)
         self.d_beta = cp.empty(MAX_B, dtype=self.tc)
         self.d_beta_prev = cp.zeros(MAX_B, dtype=self.tc)
@@ -301,7 +302,14 @@ class GpuLanczos:
         one = tc(1)
 
         def reduce_to_host(dst):
-            self.f["reduce"]((1,), (B,), (dst, self.partial, np.int32(self.rblocks), Bi))
+            # repeated tree passes (same as reduce_partials in ftlm_gpu_mex.cu)
+            src, buf, m = self.partial, self.partial2, self.rblocks
+            while m > 1:
+                nb = (m + REDUCE_BS - 1) // REDUCE_BS
+                self.f["reduce"]((nb,), (REDUCE_BS,), (buf, src, np.int32(m), Bi))
+                m = nb
+                src, buf = buf, src
+            dst[:B] = src[:B]
             return dst[:B].get()
 
         # normalize each chain to norm sigma
@@ -358,7 +366,7 @@ class GpuLanczos:
         return AL[:n_max], BE[:n_max], nsteps
 
     def free(self):
-        for name in ("v", "vp", "w", "tmp", "partial", "block_base", "block_mask",
+        for name in ("v", "vp", "w", "tmp", "partial", "partial2", "block_base", "block_mask",
                      "basis", "dcum"):
             setattr(self, name, None)
         cp.get_default_memory_pool().free_all_blocks()

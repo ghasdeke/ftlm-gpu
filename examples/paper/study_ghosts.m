@@ -11,7 +11,8 @@ function S = study_ghosts(varargin)
 %   between FP64 and FP32.
 %
 %   Name-value options:
-%     'Ctau'      numerical factor C_tau (default 4)
+%     'Ctau'      numerical factor C_tau (default 2.5; the ghost/regular
+%                 classification is unchanged for C_tau ~ 0.3 ... 20)
 %     'NL'        Lanczos steps (default 100)
 %     'Vector'    index of the start vector in the seed-0 sequence (1)
 %     'Reference' 'gpu' (default, FP64 GPU kernel) or 'cpu' (FP64 CPU)
@@ -38,7 +39,7 @@ function S = study_ghosts(varargin)
 addpath(fileparts(fileparts(fileparts(mfilename('fullpath')))));
 
 p = inputParser;
-p.addParameter('Ctau', 4);
+p.addParameter('Ctau', 2.5);
 p.addParameter('NL', 100);
 p.addParameter('Vector', 1);
 p.addParameter('Reference', 'gpu');

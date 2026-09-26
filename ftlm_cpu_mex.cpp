@@ -207,7 +207,15 @@ static int n_threads_max(void)
 #endif
 }
 
-/* res[b] = sum_i X[i,b] * Y[i,b] */
+/* res[b] = sum_i X[i,b] * Y[i,b]
+ *
+ * Each thread sums a contiguous index range in chunks of CHUNK values and
+ * combines the chunk sums by cascade (pairwise) summation, so that the
+ * rounding error grows like (CHUNK + log2 dim) u rather than dim u.  The
+ * thread results are added in thread order (deterministic for a fixed
+ * number of threads). */
+#define CHUNK 256
+#define CASCADE_LEVELS 48
 template <typename T>
 static void block_dot(T *res, const T *X, const T *Y, int dim, int B)
 {
@@ -217,25 +225,46 @@ static void block_dot(T *res, const T *X, const T *Y, int dim, int B)
 
     #pragma omp parallel num_threads(nt)
     {
-        int tid = 0, i, b;
+        int tid = 0, nth = 1, b, L;
 #ifdef _OPENMP
         tid = omp_get_thread_num();
+        nth = omp_get_num_threads();
         #pragma omp single
-        nt_used = omp_get_num_threads();
+        nt_used = nth;
 #endif
-        T loc[MAX_B];
-        for (b = 0; b < B; b++) loc[b] = (T)0;
-        #pragma omp for schedule(static)
-        for (i = 0; i < dim; i++) {
-            size_t row = (size_t)i * B;
-            for (b = 0; b < B; b++) loc[b] += X[row + b] * Y[row + b];
+        long long lo = (long long)dim * tid / nth;
+        long long hi = (long long)dim * (tid + 1) / nth;
+        T lvl[CASCADE_LEVELS][MAX_B];
+        T s[MAX_B], tot[MAX_B];
+        unsigned long long cnt = 0;
+        for (long long c0 = lo; c0 < hi; c0 += CHUNK) {
+            long long c1 = (c0 + CHUNK < hi) ? c0 + CHUNK : hi;
+            for (b = 0; b < B; b++) s[b] = (T)0;
+            for (long long i = c0; i < c1; i++) {
+                size_t row = (size_t)i * B;
+                for (b = 0; b < B; b++) s[b] += X[row + b] * Y[row + b];
+            }
+            /* binary-counter cascade: merge partial sums of equal size */
+            unsigned long long k = cnt;
+            L = 0;
+            while (k & 1ULL) {
+                for (b = 0; b < B; b++) s[b] += lvl[L][b];
+                k >>= 1;
+                L++;
+            }
+            for (b = 0; b < B; b++) lvl[L][b] = s[b];
+            cnt++;
         }
-        for (b = 0; b < B; b++) part[tid * MAX_B + b] = loc[b];
+        for (b = 0; b < B; b++) tot[b] = (T)0;
+        for (L = 0; L < CASCADE_LEVELS; L++)
+            if ((cnt >> L) & 1ULL)
+                for (b = 0; b < B; b++) tot[b] += lvl[L][b];
+        for (b = 0; b < B; b++) part[tid * MAX_B + b] = tot[b];
     }
     for (int b = 0; b < B; b++) {
-        T s = (T)0;
-        for (int k = 0; k < nt_used; k++) s += part[k * MAX_B + b];
-        res[b] = s;
+        T acc = (T)0;
+        for (int k = 0; k < nt_used; k++) acc += part[k * MAX_B + b];
+        res[b] = acc;
     }
 }
 

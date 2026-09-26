@@ -1,9 +1,10 @@
-function [bonds, N, name, short] = geometry(geom, N_ring)
+function [bonds, N, name, short, V] = geometry(geom, N_ring)
 %FTLM.GEOMETRY  Nearest-neighbor bond list of a predefined cluster.
-%   [BONDS, N, NAME, SHORT] = FTLM.GEOMETRY(GEOM) returns the bond list
+%   [BONDS, N, NAME, SHORT, V] = FTLM.GEOMETRY(GEOM) returns the bond list
 %   BONDS (N_b x 2, 1-based site indices, i < j) of the cluster GEOM,
 %   one of 'ico', 'cubo', 'cube', 'dodeca', 'icosid', 'ring'.  For
 %   'ring', the number of sites is given as second argument N_RING.
+%   V (N x 3) contains vertex coordinates (for plotting).
 %
 %   The bond order is fixed (lexicographic in the vertex numbering of
 %   the coordinate lists below) and identical in the Python package.
@@ -27,19 +28,19 @@ function [bonds, N, name, short] = geometry(geom, N_ring)
 
 switch geom
     case 'ico'
-        bonds = adjacency_icosahedron();
+        [bonds, V] = adjacency_icosahedron();
         N = 12;  name = 'Icosahedron';       short = 'ico';
     case 'cubo'
-        bonds = adjacency_cuboctahedron();
+        [bonds, V] = adjacency_cuboctahedron();
         N = 12;  name = 'Cuboctahedron';     short = 'cubo';
     case 'cube'
-        bonds = adjacency_cube();
+        [bonds, V] = adjacency_cube();
         N = 8;   name = 'Cube';              short = 'cube';
     case 'dodeca'
-        bonds = adjacency_dodecahedron();
+        [bonds, V] = adjacency_dodecahedron();
         N = 20;  name = 'Dodecahedron';      short = 'dodeca';
     case 'icosid'
-        bonds = adjacency_icosidodecahedron();
+        [bonds, V] = adjacency_icosidodecahedron();
         N = 30;  name = 'Icosidodecahedron'; short = 'icosid';
     case 'ring'
         assert(nargin >= 2 && ~isempty(N_ring) && isnumeric(N_ring) && isscalar(N_ring) ...
@@ -47,6 +48,8 @@ switch geom
                'ftlm:geometry', 'geometry ''ring'' requires N_ring (integer >= 3).');
         N = N_ring;
         bonds = adjacency_ring(N);
+        phi_k = 2 * pi * (0:N-1)' / N;
+        V = [cos(phi_k), sin(phi_k), zeros(N, 1)];
         name  = sprintf('%d-Ring', N);
         short = sprintf('ring_%d', N);
     otherwise
@@ -55,7 +58,7 @@ switch geom
 end
 end
 
-function bonds = adjacency_icosahedron()
+function [bonds, V] = adjacency_icosahedron()
 %ADJACENCY_ICOSAHEDRON  30 edges of the icosahedron (12 vertices, z=5).
     phi = (1 + sqrt(5)) / 2;
     V = [0,1,phi;  0,1,-phi;  0,-1,phi;  0,-1,-phi;
@@ -65,7 +68,7 @@ function bonds = adjacency_icosahedron()
     assert(size(bonds, 1) == 30);
 end
 
-function bonds = adjacency_cuboctahedron()
+function [bonds, V] = adjacency_cuboctahedron()
 %ADJACENCY_CUBOCTAHEDRON  24 edges of the cuboctahedron (12 vertices, z=4).
     V = [ 1, 1, 0;  1,-1, 0; -1, 1, 0; -1,-1, 0;
           1, 0, 1;  1, 0,-1; -1, 0, 1; -1, 0,-1;
@@ -74,7 +77,7 @@ function bonds = adjacency_cuboctahedron()
     assert(size(bonds, 1) == 24);
 end
 
-function bonds = adjacency_cube()
+function [bonds, V] = adjacency_cube()
 %ADJACENCY_CUBE  12 edges of the cube (8 vertices, z=3).
     V = [-1,-1,-1; 1,-1,-1; -1,1,-1; 1,1,-1;
          -1,-1, 1; 1,-1, 1; -1,1, 1; 1,1, 1];
@@ -82,7 +85,7 @@ function bonds = adjacency_cube()
     assert(size(bonds, 1) == 12);
 end
 
-function bonds = adjacency_dodecahedron()
+function [bonds, V] = adjacency_dodecahedron()
 %ADJACENCY_DODECAHEDRON  30 edges of the dodecahedron (20 vertices, z=3).
     phi = (1 + sqrt(5)) / 2;
     V = [-1,-1,-1;  1,-1,-1; -1, 1,-1;  1, 1,-1;
@@ -94,7 +97,7 @@ function bonds = adjacency_dodecahedron()
     assert(size(bonds, 1) == 30);
 end
 
-function bonds = adjacency_icosidodecahedron()
+function [bonds, V] = adjacency_icosidodecahedron()
 %ADJACENCY_ICOSIDODECAHEDRON  60 edges of the icosidodecahedron (30 vertices, z=4).
     phi   = (1 + sqrt(5)) / 2;
     polar = [0,0,phi; 0,0,-phi; phi,0,0; -phi,0,0; 0,phi,0; 0,-phi,0];
@@ -106,7 +109,8 @@ function bonds = adjacency_icosidodecahedron()
         phi/2, sc,-1/2;   -phi/2, sc,-1/2;    phi/2,-sc,-1/2;   -phi/2,-sc,-1/2;
         sc, 1/2, phi/2;   -sc, 1/2, phi/2;    sc,-1/2, phi/2;   -sc,-1/2, phi/2;
         sc, 1/2,-phi/2;   -sc, 1/2,-phi/2;    sc,-1/2,-phi/2;   -sc,-1/2,-phi/2];
-    bonds = edges_at_distance([polar; equat], 1, 0.1);
+    V = [polar; equat];
+    bonds = edges_at_distance(V, 1, 0.1);
     assert(size(bonds, 1) == 60);
 end
 

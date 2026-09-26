@@ -10,7 +10,7 @@ function out = study_lanczos_steps(varargin)
 %
 %   Name-value options:
 %     'Systems' {'ico_s1', 'ico_s3o2'}
-%     'NL'      [10 20 30 40 50 75 100 150 200 300]  (last = reference)
+%     'NL'      [10 20 30 40 50 60 75 100 150 200 300]  (last = reference)
 %     'OutDir'  '.'
 %   Output: study_lanczos_steps_<key>.mat
 
@@ -35,12 +35,12 @@ addpath(fileparts(fileparts(fileparts(mfilename('fullpath')))));
 
 p = inputParser;
 p.addParameter('Systems', {'ico_s1', 'ico_s3o2'});
-p.addParameter('NL', [10 20 30 40 50 75 100 150 200 300]);
+p.addParameter('NL', [10 20 30 40 50 60 75 100 150 200 300]);
 p.addParameter('OutDir', '.');
 p.parse(varargin{:});
 o = p.Results;
 
-T = linspace(0.02, 10, 500);
+T = unique([linspace(0.005, 0.2, 196), linspace(0.2, 10, 491)]);
 out = struct();
 for ks = 1 : numel(o.Systems)
     key = o.Systems{ks};

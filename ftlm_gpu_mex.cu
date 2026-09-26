@@ -77,7 +77,7 @@ static struct {
     double        sigma;         /* norm of stored Lanczos vectors */
     double        u;             /* unit roundoff of storage type */
     void         *d_v, *d_vp, *d_w, *d_tmp;
-    void         *d_partial, *d_alpha, *d_beta, *d_beta_prev;
+    void         *d_partial, *d_partial2, *d_alpha, *d_beta, *d_beta_prev;
     int          *d_block_base;
     unsigned int *d_block_mask;
     int          *d_basis;
@@ -90,7 +90,7 @@ static void cleanup_all(void)
 {
     ftlm_free(&g.d_v);  ftlm_free(&g.d_vp);  ftlm_free(&g.d_w);
     ftlm_free(&g.d_tmp);
-    ftlm_free(&g.d_partial);  ftlm_free(&g.d_alpha);
+    ftlm_free(&g.d_partial);  ftlm_free(&g.d_partial2);  ftlm_free(&g.d_alpha);
     ftlm_free(&g.d_beta);     ftlm_free(&g.d_beta_prev);
     ftlm_free((void **)&g.d_block_base);
     ftlm_free((void **)&g.d_block_mask);
@@ -307,6 +307,21 @@ static void to_host(TC *h, const void *d, int B)
     cuda_check(cudaMemcpy(h, d, B * sizeof(TC), cudaMemcpyDeviceToHost), "D2H");
 }
 
+/* Reduce the n x B partial sums in g.d_partial to B values at dst (device)
+ * by repeated tree passes (rounding error growth O(log2 dim)). */
+template <typename TC>
+static void reduce_partials(void *dst, int n, int B)
+{
+    TC *src = (TC *)g.d_partial, *buf = (TC *)g.d_partial2;
+    while (n > 1) {
+        int nb = (n + FTLM_REDUCE_BS - 1) / FTLM_REDUCE_BS;
+        ftlm_reduce_tree<TC><<<nb, FTLM_REDUCE_BS>>>(buf, src, n, B);
+        n = nb;
+        TC *t = src; src = buf; buf = t;
+    }
+    cuda_check(cudaMemcpy(dst, src, B * sizeof(TC), cudaMemcpyDeviceToDevice), "reduce copy");
+}
+
 static inline float  ftlm_sqrt(float x)  { return sqrtf(x); }
 static inline double ftlm_sqrt(double x) { return sqrt(x); }
 
@@ -397,8 +412,7 @@ static void do_block_lanczos(int nlhs, mxArray *plhs[], const mxArray *mV, int M
         TC nrm2[FTLM_MAX_B], sc[FTLM_MAX_B];
         ftlm_dot_partial<TS, TC><<<rblocks, FTLM_REDUCE_BS>>>(
             (TC *)g.d_partial, (const TS *)g.d_v, (const TS *)g.d_v, n, B);
-        ftlm_reduce_partial<TC><<<1, B>>>((TC *)g.d_alpha, (const TC *)g.d_partial,
-                                          rblocks, B);
+        reduce_partials<TC>(g.d_alpha, rblocks, B);
         to_host<TC>(nrm2, g.d_alpha, B);
         for (int b = 0; b < B; b++)
             sc[b] = sigma / ftlm_sqrt(nrm2[b]);
@@ -429,8 +443,7 @@ static void do_block_lanczos(int nlhs, mxArray *plhs[], const mxArray *mV, int M
         /* alpha = <v, w> / sigma^2 */
         ftlm_dot_partial<TS, TC><<<rblocks, FTLM_REDUCE_BS>>>(
             (TC *)g.d_partial, pv, pw, n, B);
-        ftlm_reduce_partial<TC><<<1, B>>>((TC *)g.d_alpha, (const TC *)g.d_partial,
-                                          rblocks, B);
+        reduce_partials<TC>(g.d_alpha, rblocks, B);
         to_host<TC>(h_alpha, g.d_alpha, B);
         for (int b = 0; b < B; b++) {
             h_alpha[b] = h_alpha[b] / sigma2;
@@ -443,8 +456,7 @@ static void do_block_lanczos(int nlhs, mxArray *plhs[], const mxArray *mV, int M
         ftlm_ortho_norm_partial<TS, TC><<<rblocks, FTLM_REDUCE_BS>>>(
             pw, pv, pvp, (const TC *)g.d_alpha, (const TC *)g.d_beta_prev,
             (TC *)g.d_partial, n, B, (j > 0) ? 1 : 0);
-        ftlm_reduce_partial<TC><<<1, B>>>((TC *)g.d_beta, (const TC *)g.d_partial,
-                                          rblocks, B);
+        reduce_partials<TC>(g.d_beta, rblocks, B);
         to_host<TC>(h_beta_sq, g.d_beta, B);
 
         int n_active = 0;
@@ -564,6 +576,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         size_t tc = (g.prec == PREC_DOUBLE) ? 8 : 4;
         int rblocks = (g.dim + FTLM_REDUCE_BS - 1) / FTLM_REDUCE_BS;
         g.d_partial   = dev_alloc((size_t)rblocks * g.B_max * tc, "partial");
+        g.d_partial2  = dev_alloc((size_t)((rblocks + FTLM_REDUCE_BS - 1) / FTLM_REDUCE_BS)
+                                  * g.B_max * tc, "partial2");
         g.d_alpha     = dev_alloc(FTLM_MAX_B * tc, "alpha");
         g.d_beta      = dev_alloc(FTLM_MAX_B * tc, "beta");
         g.d_beta_prev = dev_alloc(FTLM_MAX_B * tc, "beta_prev");
