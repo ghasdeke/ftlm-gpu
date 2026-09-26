@@ -50,10 +50,10 @@ B = load(bench_file);
 res = B.results;
 t = @(sys, m) pick(res, sys, m, 't_lanczos');
 ts = @(sys, m) pick(res, sys, m, 't_sector');
-sysdef = {'ico_s1', 'Icosahedron, $s=1$', '7.4⋅10^^4^^';
-          'ico_s3o2', 'Icosahedron, $s=3∕2$', '1.7⋅10^^6^^';
-          'ico_s2_M0', 'Icosahedron, $s=2$ ($M=0$)', '2.0⋅10^^7^^';
-          'icosid_M0', 'Icosidodecahedron, $s=1∕2$ ($M=0$)', '1.55⋅10^^8^^'};
+sysdef = {'ico_s1', 'Icosahedron, $s=1$', '7.4×10^^4^^';
+          'ico_s3o2', 'Icosahedron, $s=3∕2$', '1.7×10^^6^^';
+          'ico_s2_M0', 'Icosahedron, $s=2$ ($M=0$)', '2.0×10^^7^^';
+          'icosid_M0', 'Icosidodecahedron, $s=1∕2$ ($M=0$)', '1.55×10^^8^^'};
 rows = {{'System', '$𝒟_(M=0)$', 'CPU FP64', 'CPU FP32', 'GPU FP64 (CLT)', 'GPU FP32 (CLT)', ...
          'GPU FP32 (CR)', 'GPU FP16 (CLT)', 'Speedup FP64', 'Speedup FP32'}};
 sp64 = []; sp32 = []; cpu_gain = []; gpu_ratio = []; f16_gain = []; overhead = [];
@@ -81,6 +81,7 @@ R.cr_icosid_pct = sprintf('%.0f %%', 100 * (t('icosid_M0', 'GPU-CR-FP32') / t('i
 R.sp64_range = rng_txt(sp64, '%.1f');
 R.sp32_range = rng_txt(sp32, '%.1f');
 R.sp_min = sprintf('%.1f', min([sp64 sp32]));
+R.sp_gain = rng_txt(sp32 ./ sp64, '%.1f');        % FP32 speedup / FP64 speedup
 R.sp_max = sprintf('%.1f', max([sp64 sp32]));
 R.cpu32_gain = [rng_txt(100 * cpu_gain, '%.0f') ' %'];
 R.gpu_ratio = rng_txt(gpu_ratio, '%.1f');
@@ -89,11 +90,21 @@ R.setup_overhead = [rng_txt(100 * overhead, '%.0f') ' %'];
 nr = arrayfun(@(r) numel(r.t_lanczos_runs), res);
 R.n_runs_text = sprintf('Medians of %d timed runs after a warm-up run (icosidodecahedron: %s)', ...
     max(nr) - 1, iff(min(nr) == 2, 'one timed run', sprintf('%d timed runs', min(nr) - 1)));
+% run-to-run scatter of the timed runs (without the warm-up run)
+spr = arrayfun(@(r) max(r.t_lanczos_runs(2:end)) / min(r.t_lanczos_runs(2:end)) - 1, res);
+isc = arrayfun(@(r) startsWith(r.method, 'CPU'), res);
+R.gpu_spread = sprintf('%.0f %%', 100 * max(spr(~isc)));
+[m, i] = max(spr .* isc);
+R.cpu_spread = sprintf('%.0f %%', 100 * m);
+R.cpu_spread_runs = strjoin(arrayfun(@(x) sprintf('%.0f', x), sort(res(i).t_lanczos_runs(2:end)), ...
+                                     'UniformOutput', false), ' s and ');
 R.ic_clt32 = f3(t('icosid_M0', 'GPU-CLT-FP32'));  R.ic_cr32 = f3(t('icosid_M0', 'GPU-CR-FP32'));
 R.ic_clt64 = f3(t('icosid_M0', 'GPU-CLT-FP64'));
 R.ic_cpu64 = f3(t('icosid_M0', 'CPU-CLT-FP64'));  R.ic_cpu32 = f3(t('icosid_M0', 'CPU-CLT-FP32'));
-R.hist_cpu = sprintf('%.0f', 2.5 * ts('icosid_M0', 'CPU-CLT-FP64') / 60);
-R.hist_gpu = sprintf('%.0f', 2.5 * ts('icosid_M0', 'GPU-CLT-FP32') / 60);
+R.hist_cpu64 = sprintf('%.0f', 2.5 * ts('icosid_M0', 'CPU-CLT-FP64') / 60);
+R.hist_cpu32 = sprintf('%.0f', 2.5 * ts('icosid_M0', 'CPU-CLT-FP32') / 60);
+R.hist_gpu64 = sprintf('%.0f', 2.5 * min(ts('icosid_M0', 'GPU-CLT-FP64'), ts('icosid_M0', 'GPU-CR-FP64')) / 60);
+R.hist_gpu32 = sprintf('%.1f', 2.5 * min(ts('icosid_M0', 'GPU-CLT-FP32'), ts('icosid_M0', 'GPU-CR-FP32')) / 60);
 R.b1_text = sprintf('%s s vs. %s s for the $s=3∕2$ icosahedron and %s s vs. %s s for the $s=2$ icosahedron', ...
     f3(t('ico_s3o2', 'GPU-CLT-FP32-B1')), f3(t('ico_s3o2', 'GPU-CR-FP32-B1')), ...
     f3(t('ico_s2_M0', 'GPU-CLT-FP32-B1')), f3(t('ico_s2_M0', 'GPU-CR-FP32-B1')));
@@ -192,7 +203,7 @@ R.fp16_dE0 = sci(max(dE16));
 R.bf16_dE0 = sci(max(dEbf));
 
 %% ---------------- seeds (Fig. 2, R*) --------------------------------------
-Rs = []; ord2 = []; pool_txt = {}; lowseed = [];
+Rs = []; ord2 = []; pool_txt = {}; lowseed = []; allr = []; pfac = []; r16 = []; rbf = [];
 names = {'ico_s1', '$s=1$'; 'ico_s3o2', '$s=3∕2$'};
 for k = 1 : 2
     f = fullfile(study_dir, sprintf('study_seeds_%s.mat', names{k, 1}));
@@ -208,7 +219,15 @@ for k = 1 : 2
     rC = min(S.sigma_emp_C(okC), S.sigma_theo_C(okC)) ./ S.dC_k(1, okC);
     rX = min(S.sigma_emp_chi(okX), S.sigma_theo_chi(okX)) ./ S.dchi_k(1, okX);
     ord2(end+1) = log10(min([rC(:); rX(:)])); %#ok<AGROW>
-    pool_txt{end+1} = sprintf('changes from %s ($k=1$) to %s ($k=%d$) for %s', ...
+    allr = [allr; rC(:); rX(:)]; %#ok<AGROW>
+    pfac(end+1) = max(S.dC_k(1, :) .* w) / max(S.dC_k(end, :) .* w); %#ok<AGROW>
+    fp = fullfile(study_dir, sprintf('study_precision_%s.mat', names{k, 1}));
+    if isfile(fp)
+        P = load(fp);  sig = S.sigma_emp_C;  ok = w & sig > 0;
+        r16 = [r16, abs(P.gpu_half.C(ok) - P.gpu_double.C(ok)) ./ sig(ok)]; %#ok<AGROW>
+        rbf = [rbf, abs(P.gpu_bfloat16.C(ok) - P.gpu_double.C(ok)) ./ sig(ok)]; %#ok<AGROW>
+    end
+    pool_txt{end+1} = sprintf('from %s ($k=1$) to %s ($k=%d$) for %s', ...
         sci(max(S.dC_k(1, :) .* w)), sci(max(S.dC_k(end, :) .* w)), S.k_list(end), names{k, 2}); %#ok<AGROW>
     R.(sprintf('k_max_%s', strrep(names{k, 1}, 'ico_', ''))) = sprintf('%d', S.k_list(end));
     lowseed(end+1) = max([0, S.dC_k(1, :) .* ~w]); %#ok<AGROW>
@@ -222,6 +241,14 @@ end
 if ~isempty(Rs)
     R.Rstar_min = sci_pow(min(Rs));
     R.fig2_orders = orders_txt(ord2);
+    R.fig2_min = sprintf('%.0f', 10^min(ord2));                  % smallest ratio sigma/|Delta|
+    R.fig2_typ = num2words(round(median(log10(allr))));          % typical number of orders
+    R.pool_factor = rng_txt(pfac, '%.1f');
+    if ~isempty(r16)
+        R.fp16_sig_orders = num2words(round(-median(log10(r16))));
+        R.fp16_sig_max = sprintf('%.2g', max(r16));
+        R.bf16_sig_max = sprintf('%.2g', max(rbf));
+    end
     R.dC_pool_text = strjoin(pool_txt, ' and ');
     R.seed_lowT = sci(max(lowseed));
     if min(ord2) < 1, warning('summarize_results:margin', 'FP32 deviation not clearly below the stochastic error in the window'); end
@@ -264,6 +291,15 @@ if isfile(f)
     R.ed_bf16 = sci(mw(S.err_bf16));
     R.ed_impl = sci(mw(S.err_impl));
     R.ed_spmv = sci(S.spmv_err);
+    R.ed_fp16_all = sci(max(S.err_fp16.C));
+    R.ed_bf16_all = sci(max(S.err_bf16.C));
+    for e = {'fp32', 'fp16', 'bf16'}
+        above = S.(['err_' e{1}]).C(:)' > S.err_stoch.C(:)';
+        first_below = find(~above, 1);                % first T where it drops below
+        if isempty(first_below), Tc = S.T_range(end); elseif first_below == 1, Tc = 0;
+        else, Tc = S.T_range(first_below - 1); end
+        R.(['ed_cross_' e{1}]) = sprintf('%.2g', Tc);
+    end
     R.ed_R = sprintf('%d', S.R);
     % pointwise: is the FP32 (FP16) deviation below the stochastic error in the window?
     R.ed_fp32_below = iff(all(S.err_fp32.C(w) <= S.err_stoch.C(w)), 'yes', 'no');

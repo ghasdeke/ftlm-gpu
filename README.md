@@ -192,7 +192,7 @@ steps N_L), `T_range` (temperatures in units of J/k_B; in TOML a list or
 | `seed` | `0` | 0: v1-compatible start vectors; k > 0: independent set k |
 | `B_gpu` | `0` | GPU block size (0: adaptive, 8 if three blocks of 8 vectors fit into `L2_cache_bytes`, else 4) |
 | `B_cpu` | `8` | CPU block size |
-| `L2_cache_bytes` | `48e6` | L2 size for the adaptive `B_gpu` (48 MB = RTX 4000 Ada) |
+| `L2_cache_bytes` | `48e6` | threshold for the adaptive `B_gpu` (value used for all results of the paper; the RTX 4000 SFF Ada has a 40 MB L2 cache) |
 | `save_ritz` | `false` | store Ritz values, weights and Lanczos coefficients per sector |
 | `output_dir`, `output_name` | `'.'`, `''` | output file (default `ftlm_<tag>.mat`) |
 

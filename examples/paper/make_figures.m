@@ -227,7 +227,7 @@ function fig = fig_seeds(o, st)
     for q = 1 : 2
         S = load_study(o, sprintf('study_seeds_%s.mat', keys{q}));
         T = S.T_range(:)';
-        obs = {'C', 'chi'};  ylab = {'$C$', '$\chi$'};  slab = {'$\sigma(C)$', '$\sigma(\chi)$'};
+        obs = {'C', 'chi'};  ylab = {'$C$', '$\chi$'};  slab = {'$\sigma(C)$, $|\Delta C|$', '$\sigma(\chi)$, $|\Delta\chi|$'};
         for io = 1 : 2
             runs = S.([obs{io} '_runs']);
             pool = S.([obs{io} '_pool']);
@@ -239,8 +239,9 @@ function fig = fig_seeds(o, st)
             xlim(ax, [0 max(T)]); yl = ylim(ax); ylim(ax, [0 1.1 * yl(2)]);
             setup_axes(ax, st);
             hl = [h1(1) h2];
-            text(ax, 0.80, 0.62, ['$' spins{q} '$'], 'Units', 'normalized', 'Interpreter', 'latex', ...
-                 'FontSize', st.fl);
+            ylab_pos = [0.62 0.22];                   % above the inset (C), below the curve (chi)
+            text(ax, 0.96, ylab_pos(io), ['$' spins{q} '$'], 'Units', 'normalized', 'Interpreter', 'latex', ...
+                 'FontSize', st.fl, 'HorizontalAlignment', 'right');
             if io == 1, inset_cluster(ax, keys{q}, st, [0.50 0.28 0.24 0.40]); end
             panel_label(ax, labs(ip), st);
 
@@ -303,18 +304,17 @@ function fig = fig_ghosts(o, st, what)
                        'Location', 'southwest', 'FontSize', st.fs);
             case 'weights'
                 incl = arrayfun(@(i) nnz(X.cluster == X.cluster(i)) > 1 && any(X.ghost(X.cluster == X.cluster(i))), k);
-                semilogy(ax, X.theta(~incl), floor_log(X.w(~incl)), 'o', 'MarkerSize', 3, ...
-                         'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k'); hold(ax, 'on');
-                semilogy(ax, X.theta(incl), floor_log(X.w(incl)), 'o', 'MarkerSize', 3.5, ...
-                         'MarkerFaceColor', st.c32, 'MarkerEdgeColor', st.c32);
-                if ~isempty(X.clusters)
-                    semilogy(ax, [X.clusters.theta], [X.clusters.w_total], 'o', 'MarkerSize', 7, ...
-                             'MarkerEdgeColor', st.c64, 'LineWidth', 1.1);
-                end
+                % cluster totals first, so that nearby single values stay visible
+                hc = semilogy(ax, [X.clusters.theta], [X.clusters.w_total], 'o', 'MarkerSize', 7, ...
+                              'MarkerEdgeColor', st.c64, 'LineWidth', 1.1); hold(ax, 'on');
+                hs = semilogy(ax, X.theta(~incl), X.w(~incl), 'o', 'MarkerSize', 3, ...
+                              'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+                hm = semilogy(ax, X.theta(incl), X.w(incl), 'o', 'MarkerSize', 3.5, ...
+                              'MarkerFaceColor', st.c32, 'MarkerEdgeColor', st.c32);
                 xlabel(ax, '$\theta_k$', 'Interpreter', 'latex', 'FontSize', st.fl);
                 ylabel(ax, '$w_k$', 'Interpreter', 'latex', 'FontSize', st.fl);
-                ylim(ax, [1e-20 1]);  xlim(ax, thlim);
-                legend(ax, {'singleton', 'cluster member', 'cluster total'}, 'Interpreter', 'latex', ...
+                ylim(ax, [1e-24 1]);  xlim(ax, thlim);
+                legend(ax, [hs hm hc], {'singleton', 'cluster member', 'cluster total'}, 'Interpreter', 'latex', ...
                        'Box', 'off', 'Location', 'southwest', 'FontSize', st.fs);
         end
         title(ax, titles{q}, 'Interpreter', 'latex', 'FontSize', st.fl);
@@ -360,8 +360,9 @@ function fig = fig_lanczos_steps(o, st)
     setup_axes(ax1, st); panel_label(ax1, 'a', st);
     xlabel(ax2, '$N_L$', 'Interpreter', 'latex', 'FontSize', st.fl);
     ylabel(ax2, 'Lanczos time (s)', 'Interpreter', 'latex', 'FontSize', st.fl);
+    yl = ylim(ax2);  ylim(ax2, [0 1.6 * yl(2)]);          % free space for the legend
     legend(ax2, {'FP64, $s=1$', 'FP32, $s=1$', 'FP64, $s=3/2$', 'FP32, $s=3/2$'}, ...
-           'Interpreter', 'latex', 'Box', 'off', 'Location', 'northwest', 'FontSize', st.fs);
+           'Interpreter', 'latex', 'Box', 'off', 'Location', 'northwest', 'FontSize', st.fs, 'NumColumns', 2);
     setup_axes(ax2, st); panel_label(ax2, 'b', st);
 end
 
@@ -372,7 +373,7 @@ function fig = fig_ed(o, st)
     T = S.T_range(:)';
     fig = new_fig(st, 11.5);
     tl = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'loose');
-    obs = {'C', 'chi'};  ylab = {'$C$', '$\chi$'};  elab = {'$|\delta C|$', '$|\delta\chi|$'};
+    obs = {'C', 'chi'};  ylab = {'$C$', '$\chi$'};  elab = {'$|\Delta C|$', '$|\Delta\chi|$'};
     labs = 'abcd';
     for io = 1 : 2
         ax = nexttile(tl, io);
@@ -399,7 +400,9 @@ function fig = fig_ed(o, st)
         xlabel(ax, '$T$', 'Interpreter', 'latex', 'FontSize', st.fl);
         ylabel(ax, elab{io}, 'Interpreter', 'latex', 'FontSize', st.fl);
         emax = max([S.err_stoch.(f)(:); S.err_bf16.(f)(:); S.err_fp16.(f)(:)]);
-        xlim(ax, [0 max(T)]); ylim(ax, [1e-17 max(1, 10^ceil(log10(emax)))]);
+        set(ax, 'XScale', 'log');                          % resolves the low-temperature range
+        xlim(ax, [min(T) max(T)]); ylim(ax, [1e-17 max(1, 10^ceil(log10(emax)))]);
+        set(ax, 'XTick', 10 .^ (floor(log10(min(T))) : ceil(log10(max(T)))));
         if io == 1
             lg = legend(ax, {'stochastic', 'Lanczos truncation', 'BF16', 'FP16', 'FP32', ...
                         'CPU vs GPU (FP64)'}, 'Interpreter', 'latex', 'Box', 'off', ...

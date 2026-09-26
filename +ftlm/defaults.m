@@ -27,7 +27,8 @@ function opts = defaults(opts)
 %                              k > 0: independent set number k
 %     B_gpu         0          GPU block size (0 = adaptive, else 1..16)
 %     B_cpu         8          CPU block size (1..32)
-%     L2_cache_bytes 48e6      L2 size used by the adaptive B_gpu
+%     L2_cache_bytes 48e6      threshold of the adaptive B_gpu (paper value; the
+%                              RTX 4000 SFF Ada has a 40 MB L2 cache)
 %     save_ritz     false      keep Ritz values/weights and Lanczos
 %                              coefficients per sector in the output
 %     output_dir    '.'        directory of the output .mat file
