@@ -98,7 +98,11 @@ end
 
 function save_fig(fig, base)
     exportgraphics(fig, [base '.pdf'], 'ContentType', 'vector', 'BackgroundColor', 'white');
-    exportgraphics(fig, [base '.png'], 'Resolution', 600, 'BackgroundColor', 'white');
+    % raster copy: up to 600 dpi, but at most 4000 pixels per side -- the
+    % MATLAB rasterizer drops line objects beyond about 4096 pixels
+    fig.Units = 'inches';
+    dpi = min(600, floor(4000 / max(fig.Position(3:4))));
+    exportgraphics(fig, [base '.png'], 'Resolution', dpi, 'BackgroundColor', 'white');
     fprintf('saved %s.pdf/.png\n', base);
 end
 
@@ -140,7 +144,7 @@ function fig = fig_precision(o, st, keys, spins, ~, fignum)
             ax.YColor = 'k';
             yl = ylim(ax); ylim(ax, [0, 1.12 * yl(2)]);
             yyaxis(ax, 'right');
-            plot(ax, T, floor_log(abs(x32.(obs{io}) - ref.(obs{io}))), '-', 'Color', st.cd, ...
+            h3 = plot(ax, T, floor_log(abs(x32.(obs{io}) - ref.(obs{io}))), '-', 'Color', st.cd, ...
                  'LineWidth', st.lwd);
             set(ax, 'YScale', 'log');
             ylabel(ax, dlab{io}, 'Interpreter', 'latex', 'FontSize', st.fl);
@@ -148,15 +152,27 @@ function fig = fig_precision(o, st, keys, spins, ~, fignum)
             xlabel(ax, '$T$', 'Interpreter', 'latex', 'FontSize', st.fl);
             xlim(ax, [0, max(T)]);
             setup_axes(ax, st);
-            legend(ax, [h1 h2], {'FP64', 'FP32'}, 'Interpreter', 'latex', 'Box', 'off', ...
-                   'Location', 'northeast', 'FontSize', st.fs);
-            text(ax, 0.62, 0.12, ['$' strrep(spins{q}, 's = ', 's=') '$'], 'Units', 'normalized', ...
-                 'Interpreter', 'latex', 'FontSize', st.fl);
-            if io == 1
-                inset_cluster(ax, keys{q}, st);
-            end
+            % system name as panel title (insets would overlap the |Delta| curves)
+            title(ax, system_name(keys{q}), 'Interpreter', 'latex', 'FontSize', st.fs, ...
+                  'FontWeight', 'normal');
             panel_label(ax, labs(ip), st);
         end
+    end
+    % one legend for all panels, above the layout
+    lg = legend(ax, [h1 h2 h3], {'FP64', 'FP32', '$|\Delta|=|O_\mathrm{FP32}-O_\mathrm{FP64}|$ (right axis)'}, ...
+                'Interpreter', 'latex', 'Box', 'off', 'FontSize', st.fs, 'NumColumns', 3);
+    lg.Layout.Tile = 'north';
+end
+
+function s = system_name(key)
+    switch key
+        case 'ico_s1',      s = 'icosahedron, $s=1$';
+        case 'ico_s3o2',    s = 'icosahedron, $s=3/2$';
+        case 'ring12_s1',   s = 'ring $N=12$, $s=1$';
+        case 'ring20_s1o2', s = 'ring $N=20$, $s=1/2$';
+        case 'dodeca_s1o2', s = 'dodecahedron, $s=1/2$';
+        case 'icosid_M0',   s = 'icosidodecahedron, $s=1/2$, $M=0$';
+        otherwise,          s = key;
     end
 end
 
@@ -366,7 +382,7 @@ function fig = fig_ed(o, st)
         xlabel(ax, '$T$', 'Interpreter', 'latex', 'FontSize', st.fl);
         ylabel(ax, ylab{io}, 'Interpreter', 'latex', 'FontSize', st.fl);
         xlim(ax, [0 max(T)]); yl = ylim(ax); ylim(ax, [0 1.5 * yl(2)]);
-        legend(ax, {'ED', sprintf('FTLM FP32 ($R=%d$, $N_L=%d$)', S.R, S.NL)}, 'Interpreter', 'latex', ...
+        legend(ax, {'ED', 'FTLM (FP32)'}, 'Interpreter', 'latex', ...
                'Box', 'off', 'Location', 'northeast', 'FontSize', st.fs);
         setup_axes(ax, st);
         if io == 1, inset_ed(ax); end

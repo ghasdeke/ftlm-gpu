@@ -87,7 +87,8 @@ R.gpu_ratio = rng_txt(gpu_ratio, '%.1f');
 R.fp16_gain = [rng_txt(100 * f16_gain, '%.0f') ' %'];
 R.setup_overhead = [rng_txt(100 * overhead, '%.0f') ' %'];
 nr = arrayfun(@(r) numel(r.t_lanczos_runs), res);
-R.n_runs_text = sprintf('%d (icosidodecahedron: %d)', max(nr) - 1, min(nr) - 1);
+R.n_runs_text = sprintf('Medians of %d timed runs after a warm-up run (icosidodecahedron: %s)', ...
+    max(nr) - 1, iff(min(nr) == 2, 'one timed run', sprintf('%d timed runs', min(nr) - 1)));
 R.ic_clt32 = f3(t('icosid_M0', 'GPU-CLT-FP32'));  R.ic_cr32 = f3(t('icosid_M0', 'GPU-CR-FP32'));
 R.ic_clt64 = f3(t('icosid_M0', 'GPU-CLT-FP64'));
 R.ic_cpu64 = f3(t('icosid_M0', 'CPU-CLT-FP64'));  R.ic_cpu32 = f3(t('icosid_M0', 'CPU-CLT-FP32'));
@@ -127,10 +128,10 @@ if isfile(f)
 end
 
 %% ---------------- precision study (Figs. 1, 3; Table 5) -------------------
-rows5 = {{'System', '$𝒟_\"max\"$', '$W$', 'FP32 $|ΔC|$', 'FP32 $|Δχ|$', 'FP16 $|ΔC|$', ...
+rows5 = {{'System', '$𝒟_"max"$', '$W$', 'FP32 $|ΔC|$', 'FP32 $|Δχ|$', 'FP16 $|ΔC|$', ...
           'FP16 $|Δχ|$', 'BF16 $|ΔC|$', 'CPU FP32 $|ΔC|$', 'CPU–GPU FP64 $|ΔC|$'}};
 dc32 = [];
-W = []; d32 = []; d16 = []; d16x = []; dbf = []; dcg = []; ord1 = [];
+W = []; d32 = []; d16 = []; d16x = []; dbf = []; dcg = []; ord1 = []; dcgw = [];
 d16low = []; dbflow = []; d32low = []; rel32 = []; dE16 = []; dEbf = [];
 for k = 1 : size(keys, 1)
     f = fullfile(study_dir, sprintf('study_precision_%s.mat', keys{k, 1}));
@@ -159,6 +160,9 @@ for k = 1 : size(keys, 1)
     W(end+1) = Wk; d32(end+1) = mC(S.gpu_single); d16(end+1) = mC(S.gpu_half); %#ok<AGROW>
     if has_chi, d16x(end+1) = mX(S.gpu_half); end %#ok<AGROW>
     dbf(end+1) = mC(S.gpu_bfloat16); dcg(end+1) = cg; %#ok<AGROW>
+    if isfield(S, 'cpu_double')
+        dcgw(end+1) = max([mC(S.cpu_double), iff(has_chi, mX(S.cpu_double), 0)]); %#ok<AGROW>
+    end
     d32low(end+1) = lowC(S.gpu_single); d16low(end+1) = lowC(S.gpu_half); %#ok<AGROW>
     dbflow(end+1) = lowC(S.gpu_bfloat16); %#ok<AGROW>
     rel32(end+1) = abs(S.gpu_single.E0 / ref.E0 - 1); %#ok<AGROW>
@@ -180,6 +184,7 @@ R.fp16_lowT = sci(max(d16low));
 R.bf16_dC_max = sci(max(dbf));
 R.bf16_lowT = sci(max(dbflow));
 R.cpu_gpu64_max = sci(max(dcg));
+R.cpu_gpu64_win = sci(max(dcgw));
 if ~isempty(dc32), R.cpu32_dC_range = rng_sci(dc32); end
 R.fig1_orders = orders_txt(ord1);
 R.E0_rel_fp32 = rng_sci(rel32);
@@ -207,6 +212,11 @@ for k = 1 : 2
         sci(max(S.dC_k(1, :) .* w)), sci(max(S.dC_k(end, :) .* w)), S.k_list(end), names{k, 2}); %#ok<AGROW>
     R.(sprintf('k_max_%s', strrep(names{k, 1}, 'ico_', ''))) = sprintf('%d', S.k_list(end));
     lowseed(end+1) = max([0, S.dC_k(1, :) .* ~w]); %#ok<AGROW>
+    small = S.C_pool(:)' < 1e-6 * max(S.C_pool);     % exponentially small C
+    if any(small)
+        R.(['seed_small_T_' strrep(names{k, 1}, 'ico_', '')]) = sprintf('%.3g', max(S.T_range(small)));
+        R.(['seed_small_dC_' strrep(names{k, 1}, 'ico_', '')]) = sci(max(S.dC_k(1, small)));
+    end
     if k == 1, R.n_seeds = sprintf('%d', S.Ns); R.R_seeds_eff = sprintf('%d', S.Ns * S.R); end
 end
 if ~isempty(Rs)

@@ -28,6 +28,7 @@ if nargin < 2, cfrac = 1e-6; end
 Tlo = 0;
 files = dir(fullfile(study_dir, 'study_precision_*.mat'));
 for k = 1 : numel(files)
+    if endsWith(files(k).name, '_cpu.mat'), continue; end   % CPU-only part files
     P = load(fullfile(files(k).folder, files(k).name), 'T_range', 'gpu_double');
     if ~isfield(P, 'gpu_double'), continue; end
     Tlo = max(Tlo, first_T(P.T_range, P.gpu_double.C, cfrac));
