@@ -224,6 +224,7 @@ produced with v2.0.0 by the following scripts:
 |---|---|
 | `examples/benchmark_table3.m` | Table 3: timings of all kernel variants (CPU/GPU x FP64/FP32/FP16/BF16 x CLT/CR, single-vector runs) for the icosahedron and icosidodecahedron workloads; run it on an otherwise idle machine |
 | `examples/paper/memory_traffic.py` | memory-traffic analysis of Section 3.4 (SpMV and vector operations timed separately; Python front end) |
+| `examples/paper/memory_tables.py` | Tables 1, 2 and 4: analytic memory estimates (Eq. (10) and the formulas in the table captions; no GPU needed) |
 | `examples/paper/run_all_studies.m` | runs the studies below and `make_figures` (about 4.5 h on an RTX 4000 SFF Ada) |
 | `examples/paper/study_precision.m` | Figs. 1, 3, Table 5: FP64/FP32/FP16/BF16 GPU and FP64/FP32 CPU runs with identical start vectors |
 | `examples/paper/study_seeds.m` | Fig. 2: 50 independent FTLM runs, empirical and theoretical stochastic error, FP32 deviation of single and pooled runs |

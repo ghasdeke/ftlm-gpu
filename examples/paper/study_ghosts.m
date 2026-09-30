@@ -12,7 +12,7 @@ function S = study_ghosts(varargin)
 %
 %   Name-value options:
 %     'Ctau'      numerical factor C_tau (default 2.5; the ghost/regular
-%                 classification is unchanged for C_tau ~ 0.3 ... 20)
+%                 classification is unchanged for C_tau ~ 1.2 ... 37)
 %     'NL'        Lanczos steps (default 100)
 %     'Vector'    index of the start vector in the seed-0 sequence (1)
 %     'Reference' 'gpu' (default, FP64 GPU kernel) or 'cpu' (FP64 CPU)
