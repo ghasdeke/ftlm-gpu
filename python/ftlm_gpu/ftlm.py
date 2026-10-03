@@ -29,7 +29,7 @@ DEFAULTS = dict(
     use_cpu_reference=False,
     cpu_precision="double",
     only_M0=False,
-    ed_thresh=1000,
+    ed_thresh=1000,         # exact diagonalization for dim <= ed_thresh (if prod(2s+1) <= 2^31)
     seed=0,
     B_gpu=0,
     B_cpu=8,
@@ -219,7 +219,7 @@ def _run_sectors(model, secs, opts, label=""):
     t_lz = 0.0
     for sec in secs:
         t0 = time.perf_counter()
-        if sec.dim <= opts["ed_thresh"]:
+        if sec.dim <= opts["ed_thresh"] and model.clt_ok:   # ED needs int32 labels
             b = _basis.enumerate_sector(model, sec.A)
             e = np.linalg.eigvalsh(_basis.hamiltonian(model, b).toarray())
             ww = np.ones(sec.dim)
@@ -275,6 +275,9 @@ def run(opts=None, model=None, **kwargs):
         raise ValueError("CPU precision must be 'double' or 'single'")
     if model is None:
         model = Model.from_options(o)
+    if o["use_cpu_reference"] and not model.clt_ok:
+        raise ValueError("use_cpu_reference requires prod(2 s_k + 1) <= 2^31 "
+                         "(the CPU backend uses the basis array)")
     secs = _basis.sectors(model, o["only_M0"])
     if o["verbose"]:
         print(f"System:  {model.name}, N = {model.N}, {model.couplings.shape[0]} couplings, "

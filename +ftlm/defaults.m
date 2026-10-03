@@ -19,11 +19,13 @@ function opts = defaults(opts)
 %                              FP32 arithmetic). CPU: 'double' | 'single'
 %     lookup        'clt'      'clt' | 'cr' (GPU only)
 %     use_cpu_reference false  repeat the run with the CPU kernel
+%                              (requires prod(2 s_k + 1) <= 2^31)
 %     cpu_precision 'double'   precision of the CPU reference run
 %     only_M0       false      lowest magnetization sector only
 %     ed_thresh     1000       sectors with dim <= ed_thresh: exact
-%                              diagonalization instead of FTLM
-%     seed          0          0: v1-compatible start vectors;
+%                              diagonalization instead of FTLM (only if
+%                              prod(2 s_k + 1) <= 2^31)
+%     seed          0          0: v1-compatible start vectors (MATLAB);
 %                              k > 0: independent set number k
 %     B_gpu         0          GPU block size (0 = adaptive, else 1..16)
 %     B_cpu         8          CPU block size (1..32)
@@ -108,6 +110,11 @@ assert(is_int(opts.B_cpu, 1) && opts.B_cpu <= 32, 'ftlm:options', ...
        'B_cpu must be an integer in [1, 32].');
 assert(isnumeric(opts.L2_cache_bytes) && isscalar(opts.L2_cache_bytes) && ...
        opts.L2_cache_bytes > 0, 'ftlm:options', 'L2_cache_bytes must be positive.');
+% integer classes (e.g. int32 from a .mat file) would make the FTLM weights
+% integer-valued in mixed arithmetic
+for f = {'R', 'M_lz', 'ed_thresh', 'seed', 'B_gpu', 'B_cpu', 'L2_cache_bytes'}
+    opts.(f{1}) = double(opts.(f{1}));
+end
 opts.only_M0           = logical(opts.only_M0);
 opts.use_cpu_reference = logical(opts.use_cpu_reference);
 opts.save_ritz         = logical(opts.save_ritz);

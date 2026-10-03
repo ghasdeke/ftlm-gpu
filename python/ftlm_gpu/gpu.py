@@ -221,7 +221,7 @@ class GpuLanczos:
             raise ValueError(f"dim = {self.dim} outside [1, 2^31-1]")
         self.uni = int(np.all(model.two_s == model.two_s[0]))
         self.const = h
-        self.mod.get_global("c_p").copy_from_host(ctypes.addressof(h), ctypes.sizeof(h))
+        self._upload_const()
 
         n = self.dim
         self.sigma = np.sqrt(float(n)) if self.elem == 2 else 1.0
@@ -240,6 +240,13 @@ class GpuLanczos:
         self.d_beta_prev = cp.zeros(MAX_B, dtype=self.tc)
 
     # ------------------------------------------------------------------
+    def _upload_const(self):
+        # c_p is one __constant__ symbol per compiled module, and _module() is
+        # cached per precision, so engines of the same precision share it: the
+        # constants of this engine are uploaded before each use.
+        self.mod.get_global("c_p").copy_from_host(ctypes.addressof(self.const),
+                                                  ctypes.sizeof(self.const))
+
     def _spmv(self, W, V, B):
         n = np.int32(self.dim)
         if self.lookup == LOOKUP_CLT:
@@ -277,6 +284,7 @@ class GpuLanczos:
 
     def spmv(self, V):
         """H V in the configured precision (host float64 in/out; for tests)."""
+        self._upload_const()
         B = self._import(V)
         self._spmv(self.w, self.v, B)
         out = np.empty((self.dim, B))
@@ -293,6 +301,7 @@ class GpuLanczos:
         alpha, beta: (n_max x B) float64, zero beyond nsteps[b];
         beta[j, b] is the norm of the residual after step j.
         """
+        self._upload_const()
         tc = self.tc
         n = self.dim
         B = self._import(V0)

@@ -14,7 +14,7 @@ function res = ftlm_observables(input)
 %
 %   INPUT_FILE is a plain MATLAB script (.m) with variable assignments;
 %   see input_ico_s1_example.m (uniform preset geometry) and
-%   input_custom_mixed_example.m (coupling list, mixed spins).
+%   input_mixed_ring_example.m (coupling list, mixed spins).
 %   Alternatively, pass a struct with the same fields.
 %
 %   Model (either a preset geometry or a coupling list):

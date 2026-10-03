@@ -16,6 +16,7 @@
 or ``pytest python/tests``).  GPU tests are skipped without CuPy/GPU."""
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -24,7 +25,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ftlm_gpu import (Model, sectors, enumerate_sector, cr_tables, hamiltonian,  # noqa: E402
-                      run, sector_ftlm, CpuLanczos, DEFAULTS)
+                      run, sector_ftlm, CpuLanczos, DEFAULTS, save_results)
+from ftlm_gpu.ftlm import _run_sectors  # noqa: E402
 
 
 def gpu_available():
@@ -116,6 +118,25 @@ class TestKernels(unittest.TestCase):
             d = np.linalg.norm(Ws["clt"] - Ws["cr"]) / np.linalg.norm(self.W0)
             self.assertLess(d, 50 * u * self.scale, f"CLT/CR order ({prec})")
 
+    @unittest.skipUnless(HAVE_GPU, "no GPU")
+    def test_gpu_two_engines(self):
+        # engines of the same precision share the constant memory of the
+        # compiled module; each engine must use its own model/sector data
+        from ftlm_gpu.gpu import GpuLanczos
+        sec1 = sectors(self.m)[1]
+        b1 = enumerate_sector(self.m, sec1.A)
+        H1 = hamiltonian(self.m, b1)
+        V1 = np.random.default_rng(3).standard_normal((sec1.dim, 2))
+        for lk in ("clt", "cr"):
+            e0 = GpuLanczos(self.m, self.sec.A, lk, "double", 3, self.basis)
+            e1 = GpuLanczos(self.m, sec1.A, lk, "double", 3, b1)
+            self.check(e0.spmv(self.V), 2.0 ** -53, f"first engine ({lk})")
+            W1 = e1.spmv(V1)
+            err = np.linalg.norm(W1 - H1 @ V1) / np.linalg.norm(H1 @ V1)
+            self.assertLess(err, 1e-12, f"second engine ({lk})")
+            e0.free()
+            e1.free()
+
 
 class TestLanczos(unittest.TestCase):
     def test_exact_quadrature(self):
@@ -196,6 +217,39 @@ class TestLanczos(unittest.TestCase):
             eng.free()
             err = max(np.abs(a[:nl] - AL).max(), np.abs(bt[:nl] - BE).max()) / np.abs(AL).max()
             self.assertLess(err, tol, prec)
+
+    def test_cr_beyond_2_31(self):
+        # prod(2 s_i + 1) = 2^32: the exact diagonalization of small sectors
+        # (int32 basis) is not available; these sectors are treated by FTLM
+        m = Model.preset("ring", s=0.5, n_ring=32)
+        self.assertFalse(m.clt_ok)
+        self.assertTrue(m.cr_ok)
+        opts = dict(DEFAULTS, R=8, M_lz=40, T_range=np.array([1.0]), lookup="cr",
+                    precision="double", verbose=False)
+        with self.assertRaises(ValueError):     # CPU reference needs the basis array
+            run(opts, model=m, use_cpu_reference=True)
+        if not HAVE_GPU:
+            return
+        small = [sec for sec in sectors(m) if sec.dim <= opts["ed_thresh"]]
+        self.assertEqual([sec.dim for sec in small], [496, 32, 1])
+        E, w, M, info = _run_sectors(m, small, opts)
+        self.assertTrue(all(meth.startswith("Lanczos") for meth in info["method"]))
+        # ferromagnetic state E = N s^2 J = 8, one-magnon minimum 8 - 4 s J = 6
+        self.assertAlmostEqual(max(E), 8.0, places=9)
+        self.assertAlmostEqual(min(E[np.asarray(M) == 15]), 6.0, places=9)
+
+    def test_save_npz(self):
+        m = Model.preset("ring", s=0.5, n_ring=6)
+        res = run(model=m, R=4, M_lz=10, T_range=[0.5, 1.0], backend="cpu",
+                  save_ritz=True, verbose=False)
+        with tempfile.TemporaryDirectory() as d:
+            f = save_results(res, Path(d) / "r.npz")
+            with np.load(f) as z:       # default allow_pickle=False
+                self.assertEqual(list(z["sector_method"]), list(res["sector_method"]))
+                np.testing.assert_allclose(z["C_T"], res["C_T"])
+            with np.load(f, allow_pickle=True) as z:
+                self.assertEqual(len(z["ritz"]), len(res["sector_method"]))
+            save_results(res, Path(d) / "r.mat")
 
     def test_ftlm_vs_ed(self):
         # statistical test: stochastic error of FTLM with R_eff = min(R, dim)

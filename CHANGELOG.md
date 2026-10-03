@@ -56,7 +56,9 @@ different order, see below).
   stopped all chains as soon as one had `beta < 1e-14`). N_L and R are
   capped at the sector dimension as before.
 - Default `ed_thresh = 1000` (v1: 0): small sectors are diagonalized
-  exactly.
+  exactly if prod(2 s_i + 1) <= 2^31 (the exact diagonalization uses the
+  int32 sector basis); for larger label spaces (`lookup = 'cr'`) all
+  sectors are treated by FTLM, as in v1.
 - The combinatorial ranking uses the digit convention a = m + s of the
   CLT, so both lookup strategies act on identically ordered vectors.
 - Basis enumeration by a site-by-site construction, O(N dim) instead of
@@ -78,7 +80,16 @@ different order, see below).
   overflow for dim x B > 2^31; not reached with the v1 default block
   sizes); CUDA errors, including allocation failures, are
   reported; the GPU block size is reduced automatically if the sector
-  does not fit into free device memory.
+  does not fit into free device memory. The GPU buffers of a sector are
+  released also when the run fails or is interrupted (Ctrl+C), and
+  integer-class numeric options are converted to double.
+  `use_cpu_reference` with prod(2 s_i + 1) > 2^31 is rejected at the
+  start of the run.
+- Python front end: several `GpuLanczos` engines of the same precision
+  can coexist (the model and sector constants are uploaded before each
+  call); the command line honors `output_dir`/`output_name` and saves the
+  Ritz data with `save_ritz`; `sector_method` is stored as a string array
+  in `.npz` files.
 
 ### Removed
 - `cuda_lanczos_clut_block.cu`, `cuda_lanczos_crank_Sr_general.cu`,

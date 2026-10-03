@@ -28,8 +28,9 @@
  *       cfg: struct built by ftlm.kernel_config (see +ftlm/kernel_config.m)
  *   [AL, BE, nsteps] = ftlm_gpu_mex('block_lanczos', V0, M_lz)
  *       V0:  dim x B start vectors (gpuArray or host; single or double)
- *       AL, BE: M_lz x B Lanczos coefficients (double); entries beyond
- *               nsteps(b) are zero.  BE(j,b) is beta_j (norm after step j).
+ *       AL, BE: n_max x B Lanczos coefficients (double), n_max =
+ *               max(nsteps) <= min(M_lz, dim); entries beyond nsteps(b)
+ *               are zero.  BE(j,b) is beta_j (norm after step j).
  *       nsteps: 1 x B number of valid steps per chain
  *   W = ftlm_gpu_mex('spmv', V)
  *       H * V in the configured precision (host double in/out; for tests)
@@ -102,6 +103,7 @@ static void cleanup_all(void)
 static void cuda_check(cudaError_t err, const char *what)
 {
     if (err != cudaSuccess) {
+        (void)cudaGetLastError();   /* do not leave the error for later checks */
         cleanup_all();
         mexErrMsgIdAndTxt("ftlm_gpu:cuda", "%s failed: %s", what,
                           cudaGetErrorString(err));
@@ -530,7 +532,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         if (nrhs < 2 || !mxIsStruct(prhs[1]))
             mexErrMsgIdAndTxt("ftlm_gpu:init", "Usage: ftlm_gpu_mex('init', cfg)");
         const mxArray *cfg = prhs[1];
-        if (g.init) cleanup_all();
+        /* also frees what an earlier failed 'init' left behind; errors of
+         * cudaFree on pointers invalidated by a device reset are cleared */
+        cleanup_all();
+        (void)cudaGetLastError();
 
         char buf[32];
         string_field(cfg, "lookup", buf, sizeof(buf));

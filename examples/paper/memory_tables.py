@@ -2,8 +2,10 @@
 
 Usage:  python memory_tables.py
 
-Table 1  number of nonzeros N_nz of the M = 0 sector Hamiltonian of the
-         icosahedron (N = 12, N_B = 30) from Eq. (10) and the memory of a
+Table 1  number of stored entries N_nz of the M = 0 sector Hamiltonian of
+         the icosahedron (N = 12, N_B = 30) from Eq. (10) (all diagonal
+         elements counted, although for integer s a few of them vanish)
+         and the memory of a
          MATLAB-style 64-bit sparse matrix, 16 N_nz + 8 (D_0 + 1) bytes
 Table 2  memory of the stored Hamiltonian (CS), the full lookup table, the
          compressed lookup table (CLT), the basis array and three FP64 work
@@ -14,6 +16,24 @@ Table 4  GPU memory budget of the CLT-based batched kernel (B = 4, FP32):
 Sizes are in decimal units (1 MB = 1e6 bytes).  The paper rounds to about
 three significant digits.
 """
+
+# ================================================================
+# Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
+# and Helmholtz-Zentrum Dresden-Rossendorf e.V.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ================================================================
+
 from fractions import Fraction
 
 
@@ -42,7 +62,7 @@ def dim_M(n_sites, s, M):
 
 
 def nnz(n_sites, s, n_bonds, M=Fraction(0)):
-    """Eq. (10): diagonal plus the two ladder-operator terms of each bond."""
+    """Eq. (10): all diagonal elements plus the two ladder-operator terms of each bond."""
     s = Fraction(s)
     m_values = [-s + k for k in range(int(2 * s) + 1)]
     a_range = [m for m in m_values if m <= s - 1]      # s_i^+ acts on m_i = a

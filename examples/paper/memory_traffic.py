@@ -27,7 +27,7 @@ byte counts per step (element size e):
 
 n_off is the exact number of off-diagonal matrix elements of the sector.
 The device-to-device copy bandwidth is measured for reference.  Requires
-CuPy (see python/README).
+CuPy (see README.md, Requirements).
 """
 
 # ================================================================

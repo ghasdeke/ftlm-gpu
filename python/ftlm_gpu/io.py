@@ -75,6 +75,11 @@ def result_arrays(res):
                                                           m.couplings[:, 2])),
                N=m.N, n_total_save=float(m.D_full), geometry=m.geometry,
                sector_method=np.array(res["sector_method"], dtype=object))
+    if res.get("ritz") is not None:
+        ritz = np.empty(len(res["ritz"]), dtype=object)
+        for i, r in enumerate(res["ritz"]):
+            ritz[i] = r
+        out["ritz"] = ritz
     for k in ("R", "M_lz", "precision", "lookup", "backend", "cpu_precision",
               "ed_thresh", "seed", "B_gpu", "B_cpu", "only_M0", "use_cpu_reference"):
         out[k] = o[k]
@@ -82,7 +87,12 @@ def result_arrays(res):
 
 
 def save_results(res, path):
-    """Save to .mat (scipy.io, MATLAB names; couplings 1-based) or .npz."""
+    """Save to .mat (scipy.io, MATLAB names; couplings 1-based) or .npz.
+
+    In .npz files, sector_method is stored as a string array; the optional
+    per-sector Ritz data ('ritz', with save_ritz) is an object array and
+    requires np.load(..., allow_pickle=True).
+    """
     path = Path(path)
     arrays = result_arrays(res)
     if path.suffix.lower() == ".mat":
@@ -90,5 +100,6 @@ def save_results(res, path):
         savemat(path, {k: v for k, v in arrays.items()
                        if not (isinstance(v, float) and np.isnan(v))})
     else:
-        np.savez(path, **{k: np.asarray(v) for k, v in arrays.items()})
+        np.savez(path, **{k: (np.asarray(v, dtype=str) if k == "sector_method" else np.asarray(v))
+                          for k, v in arrays.items()})
     return path

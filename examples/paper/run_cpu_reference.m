@@ -3,7 +3,8 @@ function run_cpu_reference(out_dir, action)
 %   The CPU variants of study_precision (OpenMP kernel, FP64 and FP32) do
 %   not use the GPU, and no timing of them is reported.  RUN_ALL_STUDIES
 %   therefore starts them in a second MATLAB session in parallel with the
-%   GPU studies:
+%   GPU studies (on Windows, where the MATLAB launcher returns at once; on
+%   other systems RUN_ALL_STUDIES runs them in its own session):
 %
 %   RUN_CPU_REFERENCE(OUT_DIR, 'start')  starts the second session
 %   RUN_CPU_REFERENCE(OUT_DIR, 'run')    (in that session) computes the CPU
@@ -33,7 +34,8 @@ function run_cpu_reference(out_dir, action)
 
 here = fileparts(mfilename('fullpath'));
 out_dir = char(out_dir);
-if numel(out_dir) < 2 || out_dir(2) ~= ':', out_dir = fullfile(pwd, out_dir); end
+is_abs = startsWith(out_dir, {'/', '\'}) || (numel(out_dir) >= 2 && out_dir(2) == ':');
+if ~is_abs, out_dir = fullfile(pwd, out_dir); end
 marker = fullfile(out_dir, 'cpu_reference_done.txt');
 switch action
     case 'start'

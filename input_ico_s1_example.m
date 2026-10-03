@@ -46,7 +46,7 @@ s_val    = 1.0;
 
 % Number of FTLM random vectors per S^z sector.  The quick-start demo
 % uses R = 50 to keep the runtime short; the precision analysis in the
-% paper (Figs. 1-3) uses R = 100.
+% paper (Figs. 1-3) uses R = 100 (R = 8 for the icosidodecahedron).
 R        = 50;
 
 % Lanczos steps per random vector (N_L).
@@ -96,7 +96,7 @@ only_M0 = false;
 % L2_cache_bytes, else 4), otherwise an integer in [1, 16].
 B_gpu = 0;
 B_cpu = 8;
-L2_cache_bytes = 48e6;     % 48 MB = NVIDIA RTX 4000 Ada; adjust to your GPU
+L2_cache_bytes = 48e6;     % threshold of the adaptive B_gpu used for the paper (the RTX 4000 SFF Ada has a 40 MB L2 cache); adjust to your GPU
 
 % Keep Ritz values/weights and Lanczos coefficients per sector.
 save_ritz = false;

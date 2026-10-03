@@ -71,6 +71,8 @@ end
 cfg = ftlm.kernel_config(model, sec.A, opts.lookup, opts.precision, B, basis);
 assert(cfg.dim == dim, 'ftlm:sector_ftlm', 'dimension mismatch (%d vs %d).', cfg.dim, dim);
 mex_fun('init', cfg);
+% release the device/host buffers also on errors and Ctrl+C
+guard = onCleanup(@() mex_fun('cleanup')); %#ok<NASGU>
 clear cfg
 
 %% ---- random start vectors ----------------------------------------------

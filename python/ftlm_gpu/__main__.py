@@ -26,8 +26,9 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="ftlm_gpu",
                                 description="Sector-FTLM thermodynamics of spin clusters")
     p.add_argument("input", help="input file (.toml or .json)")
-    p.add_argument("-o", "--output", help="result file (.npz or .mat); "
-                   "default ftlm_<tag>.npz in the input file's directory")
+    p.add_argument("-o", "--output", help="result file (.npz or .mat); default: output_dir/"
+                   "output_name from the input file, else ftlm_<tag>.npz in the input file's "
+                   "directory")
     p.add_argument("--backend", choices=["gpu", "cpu"])
     p.add_argument("--precision", choices=["single", "double", "half", "bfloat16"])
     p.add_argument("--lookup", choices=["clt", "cr"])
@@ -39,7 +40,12 @@ def main(argv=None):
             opts[key] = getattr(args, key)
     model = Model.from_options(opts)
     res = run(opts, model=model)
-    out = args.output or Path(args.input).with_name(f"ftlm_{model.tag}.npz")
+    if args.output:
+        out = Path(args.output)
+    else:
+        name = opts.get("output_name") or f"ftlm_{model.tag}.npz"
+        out = Path(args.input).parent / opts.get("output_dir", ".") / name
+        out.parent.mkdir(parents=True, exist_ok=True)
     print(f"\nResults saved to: {save_results(res, out)}")
 
 

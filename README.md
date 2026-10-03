@@ -62,7 +62,9 @@ their entries stay in the normal FP16 range. The small tridiagonal
 eigenproblems are always solved in FP64 on the host.
 
 Accuracy: FP32 is the recommended default; its deviations from FP64 are
-far below the stochastic FTLM error (paper, Sections 3.1-3.5). With 16-bit
+far below the stochastic FTLM error except at the lowest temperatures,
+where the heat capacity itself is exponentially small (paper, Sections
+3.1-3.5). With 16-bit
 storage the energy resolution is of order u W (u = 2^-11 for FP16, 2^-8
 for BF16; W the spectral width), so FP16 results are reliable only for
 temperatures well above u W, and BF16 is not recommended for
@@ -82,16 +84,21 @@ Kernels:
 **Small sectors.** The number of Lanczos steps and of random vectors are
 capped at the sector dimension, N_L,eff = min(N_L, dim) and R_eff =
 min(R, dim). Each Lanczos chain stops individually when its Krylov space
-is exhausted (beta_j <= c u ||T_j||_1 with the unit roundoff u of the
-storage precision; c = 64 for FP64/FP32 and 8 for FP16/BF16), which
-happens when the start vector overlaps with fewer than N_L distinct
-eigenvalues. Sectors with dim <= `ed_thresh` (default 1000) are
-diagonalized exactly instead of FTLM.
+is numerically exhausted (beta_j <= c u ||T_j||_1 with the unit roundoff
+u of the storage precision; c = 64 for FP64/FP32 and 8 for FP16/BF16).
+This happens in small, highly degenerate sectors, where the start vector
+overlaps with fewer than N_L,eff distinct eigenvalues; otherwise loss of
+orthogonality sets in first and the chain runs N_L,eff steps. Sectors
+with dim <= `ed_thresh` (default 1000) are diagonalized exactly instead
+of FTLM if prod_i(2 s_i + 1) <= 2^31 (the exact diagonalization uses the
+int32 sector basis); for larger label spaces (`lookup = 'cr'`) all
+sectors are treated by FTLM.
 
 **Size limits.** N <= 32 sites, at most 512 couplings, s_i <= 15/2, sector
 dimension < 2^31. CLT: prod_i(2 s_i + 1) <= 2^31. CR: the packed state
-needs sum_i ceil(log2(2 s_i + 1)) <= 64 bits and the cumulative dimension
-table at most 48 kB. The code checks all limits and reports clear errors.
+needs sum_i ceil(log2(2 s_i + 1)) <= 64 bits, and the cumulative dimension
+table together with the ladder-factor tables (2 kB; FP64: 4 kB) must fit
+into 48 kB of shared memory. The code checks all limits and reports clear errors.
 
 ## Requirements
 
@@ -185,16 +192,16 @@ steps N_L), `T_range` (temperatures in units of J/k_B; in TOML a list or
 | `backend` | `'gpu'` | `'gpu'` or `'cpu'` |
 | `precision` | `'single'` | see table above |
 | `lookup` | `'clt'` | `'clt'` or `'cr'` (GPU) |
-| `use_cpu_reference` | `false` | repeat the run on the CPU with `cpu_precision` (same start vectors) |
+| `use_cpu_reference` | `false` | repeat the run on the CPU with `cpu_precision` (same start vectors; requires prod(2 s_i + 1) <= 2^31) |
 | `cpu_precision` | `'double'` | `'double'` or `'single'` |
-| `ed_thresh` | `1000` | sectors with dim <= ed_thresh: exact diagonalization |
+| `ed_thresh` | `1000` | sectors with dim <= ed_thresh: exact diagonalization (if prod(2 s_i + 1) <= 2^31) |
 | `only_M0` | `false` | lowest magnetization sector only |
-| `seed` | `0` | 0: v1-compatible start vectors; k > 0: independent set k |
+| `seed` | `0` | 0: start vectors from a generator seeded with the sector dimension (MATLAB: `rng(dim, 'twister')`, v1-compatible; Python: NumPy PCG64, statistically equivalent but different vectors); k > 0: independent set k |
 | `B_gpu` | `0` | GPU block size (0: adaptive, 8 if three blocks of 8 vectors fit into `L2_cache_bytes`, else 4) |
 | `B_cpu` | `8` | CPU block size |
 | `L2_cache_bytes` | `48e6` | threshold for the adaptive `B_gpu` (value used for all results of the paper; the RTX 4000 SFF Ada has a 40 MB L2 cache) |
 | `save_ritz` | `false` | store Ritz values, weights and Lanczos coefficients per sector |
-| `output_dir`, `output_name` | `'.'`, `''` | output file (default `ftlm_<tag>.mat`) |
+| `output_dir`, `output_name` | `'.'`, `''` | output file (default `ftlm_<tag>.mat`; Python command line: `ftlm_<tag>.npz`, or option `-o`) |
 
 See `help ftlm.defaults` (MATLAB) or `ftlm_gpu.DEFAULTS` (Python).
 
@@ -205,6 +212,8 @@ See `help ftlm.defaults` (MATLAB) or `ftlm_gpu.DEFAULTS` (Python).
 `C_T_cpu`, `chi_T_cpu`, `Z_eff_cpu`, the model (`spins`, `couplings`),
 the configuration, per-sector data (`sector_M`, `sector_dims`,
 `sector_method`, ...) and timings. `chi_T` is given per g^2 mu_B^2 / k_B.
+With `save_ritz`, the Ritz data per sector are included (`ritz`; in
+`.npz` files an object array, to be read with `allow_pickle=True`).
 
 ## Tests
 
@@ -225,18 +234,18 @@ produced with v2.0.0 by the following scripts:
 | `examples/benchmark_table3.m` | Table 3: timings of all kernel variants (CPU/GPU x FP64/FP32/FP16/BF16 x CLT/CR, single-vector runs) for the icosahedron and icosidodecahedron workloads; run it on an otherwise idle machine |
 | `examples/paper/memory_traffic.py` | memory-traffic analysis of Section 3.4 (SpMV and vector operations timed separately; Python front end) |
 | `examples/paper/memory_tables.py` | Tables 1, 2 and 4: analytic memory estimates (Eq. (10) and the formulas in the table captions; no GPU needed) |
-| `examples/paper/run_all_studies.m` | runs the studies below and `make_figures` (about 4.5 h on an RTX 4000 SFF Ada) |
+| `examples/paper/run_all_studies.m` | runs the studies below and `make_figures` (about 2.7 h on an RTX 4000 SFF Ada) |
 | `examples/paper/study_precision.m` | Figs. 1, 3, Table 5: FP64/FP32/FP16/BF16 GPU and FP64/FP32 CPU runs with identical start vectors |
 | `examples/paper/study_seeds.m` | Fig. 2: 50 independent FTLM runs, empirical and theoretical stochastic error, FP32 deviation of single and pooled runs |
 | `examples/paper/study_ghosts.m` | Figs. 4, 5: ghost diagnostic and cluster weights |
 | `examples/paper/study_lanczos_steps.m` | Fig. 6: convergence in the number of Lanczos steps (one run with N_L = 300 per precision; smaller N_L by truncating the recorded Lanczos coefficients, which is identical to separate runs) |
-| `examples/paper/run_cpu_reference.m` | CPU variants of the precision study in a second MATLAB session, in parallel with the GPU studies (started by `run_all_studies`) |
+| `examples/paper/run_cpu_reference.m` | CPU variants of the precision study in a second MATLAB session, in parallel with the GPU studies (started by `run_all_studies` on Windows; elsewhere the CPU variants run in the same session) |
 | `examples/paper/study_ed_decomposition.m` | Fig. 7: error decomposition against exact diagonalization |
 | `examples/paper/study_exact_icosahedron.m` | comparison with the exact heat capacity of the s = 3/2 icosahedron (`examples/paper/data`) |
-| `examples/paper/make_figures.m` | Figs. 1-7 (PDF and 600 dpi PNG) from the study files |
+| `examples/paper/make_figures.m` | Figs. 1-7 (PDF and PNG with up to 600 dpi) from the study files |
 | `examples/paper/summarize_results.m` | the numbers quoted in the text and the rows of Tables 3 and 5 (JSON) |
 
-The precision studies use `R = 100`, `M_lz = 100`, `ed_thresh = 0` and
+The precision studies use `R = 100` (icosidodecahedron: `R = 8`), `M_lz = 100`, `ed_thresh = 0` and
 `seed = 0` (start vectors drawn in FP64 from `rng(dim, 'twister')` and
 rounded to the storage precision). `plot_paperfig1_v2.m` plots C(T) and
 chi(T) of a single `ftlm_observables` result with `use_cpu_reference`.

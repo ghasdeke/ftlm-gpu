@@ -4,11 +4,12 @@ function run_all_studies(out_dir)
 %       study_ghosts, study_ed_decomposition, study_lanczos_steps,
 %       study_precision, study_exact_icosahedron, study_seeds
 %   writing the study_*.mat files and the figures fig1..fig7 to OUT_DIR.
-%   The CPU variants of study_precision run in a second MATLAB session in
-%   parallel with the GPU studies (run_cpu_reference); the results are
-%   the same as in a sequential run.
-%   Total run time on the RTX 4000 SFF Ada workstation: roughly 4 hours
-%   (dominated by study_seeds and the CPU references in study_precision).
+%   On Windows, the CPU variants of study_precision run in a second MATLAB
+%   session in parallel with the GPU studies (run_cpu_reference); on other
+%   systems they run in the same session.  The results are the same in
+%   both cases.
+%   Total run time on the RTX 4000 SFF Ada workstation: about 2.7 hours
+%   (dominated by study_seeds; the CPU references run in parallel).
 %   The timings of Table 3 are produced separately by
 %   examples/benchmark_table3.m (run it on an otherwise idle machine).
 
@@ -36,15 +37,20 @@ addpath(here);
 t0 = tic;
 step = @(name) fprintf('\n##### %s (%.0f min elapsed) #####\n', name, toc(t0) / 60);
 
+% the MATLAB launcher returns immediately only on Windows; elsewhere the CPU
+% variants of study_precision run in this session
+par  = ispc;
+vars = {'gpu_double', 'gpu_single', 'gpu_half', 'gpu_bfloat16'};
+if ~par, vars = [vars, {'cpu_double', 'cpu_single'}]; end
+
 steps = {'study_ghosts',            @() study_ghosts('OutDir', out_dir);
          'study_ed_decomposition',  @() study_ed_decomposition('OutDir', out_dir);
          'study_lanczos_steps',     @() study_lanczos_steps('OutDir', out_dir);
-         'cpu_reference (start)',   @() run_cpu_reference(out_dir, 'start');
-         'study_precision (GPU)',   @() study_precision('OutDir', out_dir, 'Variants', ...
-                                        {'gpu_double', 'gpu_single', 'gpu_half', 'gpu_bfloat16'});
+         'cpu_reference (start)',   @() cpu_reference(par, out_dir, 'start');
+         'study_precision',         @() study_precision('OutDir', out_dir, 'Variants', vars);
          'study_exact_icosahedron', @() study_exact_icosahedron('DataDir', out_dir);
          'study_seeds',             @() study_seeds('OutDir', out_dir);
-         'cpu_reference (merge)',   @() run_cpu_reference(out_dir, 'merge');
+         'cpu_reference (merge)',   @() cpu_reference(par, out_dir, 'merge');
          'make_figures',            @() make_figures('DataDir', out_dir, 'OutDir', out_dir)};
 for k = 1 : size(steps, 1)
     step(steps{k, 1});
@@ -55,4 +61,13 @@ for k = 1 : size(steps, 1)
     end
 end
 fprintf('\nAll studies done in %.1f h.\n', toc(t0) / 3600);
+end
+
+function cpu_reference(par, out_dir, action)
+% second MATLAB session for the CPU variants (Windows only, see above)
+if par
+    run_cpu_reference(out_dir, action);
+else
+    fprintf('CPU variants run within study_precision in this session.\n');
+end
 end

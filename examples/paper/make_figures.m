@@ -3,7 +3,7 @@ function make_figures(varargin)
 %   MAKE_FIGURES('DataDir', D, 'OutDir', O, 'Figures', [1 2 3 4 5 6 7])
 %   reads the output of study_precision, study_seeds, study_ghosts,
 %   study_lanczos_steps and study_ed_decomposition from D and writes
-%   figN.pdf (vector) and figN.png (600 dpi) to O.
+%   figN.pdf (vector) and figN.png (up to 600 dpi, at most 4000 px per side) to O.
 %
 %     Fig. 1  C, chi and |Delta| (FP32 vs FP64, same GPU kernel), icosahedron s=1, 3/2
 %     Fig. 2  multi-seed analysis: runs, pooled result, sigma_emp, sigma_theo, |Delta_FP32|

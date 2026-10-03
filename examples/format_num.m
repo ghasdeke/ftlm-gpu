@@ -16,9 +16,8 @@
 function s = format_num(n)
 %FORMAT_NUM  Format an integer count compactly, e.g. "19.61M", "531.4k", "4096".
 %
-%   Small utility used by the benchmark scripts (benchmark_ico_v1.m,
-%   benchmark_icosid_v1.m) to print Hilbert-space and sector dimensions
-%   in a human-readable form.
+%   Small utility to print Hilbert-space and sector dimensions in a
+%   human-readable form.
     if n >= 1e6
         s = sprintf('%.2fM', n/1e6);
     elseif n >= 1e3

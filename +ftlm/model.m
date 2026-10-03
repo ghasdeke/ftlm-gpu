@@ -67,6 +67,7 @@ if use_custom
     assert(isnumeric(couplings) && ismatrix(couplings) && size(couplings, 2) == 3 ...
            && size(couplings, 1) >= 1 && all(isfinite(couplings(:))), ...
            'ftlm:model', 'couplings must be a K x 3 matrix [i, j, J_ij] of finite numbers.');
+    couplings = double(couplings);
     ij = couplings(:, 1:2);
     assert(all(ij(:) == round(ij(:))) && all(ij(:) >= 1), ...
            'ftlm:model', 'coupling site indices must be positive integers (1-based).');
@@ -82,7 +83,7 @@ else
     [bonds, N_geo, name, short] = ftlm.geometry(geometry, N_ring);
     assert(~isempty(J) && isnumeric(J) && isscalar(J) && isfinite(J), 'ftlm:model', ...
            'A predefined geometry requires a finite scalar coupling J.');
-    couplings = [bonds, J * ones(size(bonds, 1), 1)];
+    couplings = [bonds, double(J) * ones(size(bonds, 1), 1)];
 end
 
 %% ---- sites and spins -------------------------------------------------

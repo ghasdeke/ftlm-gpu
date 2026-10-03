@@ -250,6 +250,19 @@ function test_validation(~)
     end
     m = ftlm.model(struct('couplings', [1 2 1; 2 1 0.5; 2 3 0; 3 1 2], 's_val', 1));
     assert(isequal(m.couplings, [1 2 1.5; 3 1 2]), 'coupling merge/drop failed');
+    % integer-class options are converted to double (FTLM weights)
+    o = ftlm.defaults(struct('R', int32(50), 'M_lz', int16(100), 'T_range', 1));
+    assert(isa(o.R, 'double') && isa(o.M_lz, 'double'), 'integer options not converted');
+    % prod(2s+1) = 2^32: the CPU reference (CLT) is rejected before any sector runs
+    threw = false;
+    try
+        ftlm.run(struct('geometry', 'ring', 'N_ring', 32, 's_val', 0.5, 'J', 1, ...
+                        'R', 2, 'M_lz', 2, 'T_range', 1, 'lookup', 'cr', ...
+                        'use_cpu_reference', true, 'verbose', false));
+    catch ME
+        threw = strcmp(ME.identifier, 'ftlm:options');
+    end
+    assert(threw, 'use_cpu_reference with prod(2s+1) > 2^31 not rejected');
 end
 
 function test_large_sector(use_gpu)

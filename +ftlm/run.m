@@ -9,7 +9,10 @@ function res = run(opts)
 %   fields.
 %
 %   Sectors with dim <= OPTS.ed_thresh are diagonalized exactly (dense
-%   eig in FP64 on the host) instead of FTLM.
+%   eig in FP64 on the host) instead of FTLM, provided that
+%   prod(2 s_k + 1) <= 2^31 (the exact diagonalization uses the int32
+%   sector basis); for larger label spaces (lookup = 'cr'), all sectors
+%   are treated by FTLM.
 
 % ================================================================
 % Copyright 2026 Shadan Ghassemi Tabrizi, Technische Universitaet Dresden,
@@ -30,6 +33,9 @@ function res = run(opts)
 
 opts  = ftlm.defaults(opts);
 model = ftlm.model(opts);
+assert(~opts.use_cpu_reference || model.clt_ok, 'ftlm:options', ...
+    ['use_cpu_reference requires prod(2 s_k + 1) <= 2^31 ', ...
+     '(the CPU kernel uses the CLT).']);
 secs  = ftlm.sectors(model, opts.only_M0);
 vb    = opts.verbose;
 
@@ -116,7 +122,7 @@ function out = run_all_sectors(model, secs, opts, vb, label)
     for q = 1 : n
         sec = secs(q);
         t_sec = tic;
-        if sec.dim <= opts.ed_thresh
+        if sec.dim <= opts.ed_thresh && model.clt_ok   % ED needs int32 labels
             basis = ftlm.enumerate_sector(model, sec.A);
             E = sort(eig(full(ftlm.hamiltonian(model, basis))));
             w = ones(sec.dim, 1);

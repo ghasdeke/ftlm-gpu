@@ -30,7 +30,8 @@ function basis = enumerate_sector(model, A)
 
 assert(model.clt_ok, 'ftlm:enumerate', ...
     ['prod(2 s_k + 1) = %.3g exceeds 2^31: labels do not fit into int32. ', ...
-     'Use lookup = ''cr'' (no basis array needed).'], model.D_full);
+     'The basis array (CLT, CPU backend) requires prod(2 s_k + 1) <= 2^31; ', ...
+     'on the GPU, use lookup = ''cr'' (no basis array needed).'], model.D_full);
 
 N     = model.N;
 two_s = model.two_s;

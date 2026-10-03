@@ -59,7 +59,8 @@ def enumerate_sector(model, A):
     kept.  Requires prod(2 s_k + 1) <= 2^31.
     """
     if not model.clt_ok:
-        raise ValueError("prod(2 s_k + 1) exceeds 2^31: labels do not fit into int32; "
+        raise ValueError("prod(2 s_k + 1) exceeds 2^31: labels do not fit into int32; the basis "
+                         "array (CLT, CPU backend) requires prod(2 s_k + 1) <= 2^31; on the GPU, "
                          "use lookup='cr'")
     two_s = [int(t) for t in model.two_s]
     P = [int(p) for p in model.power]

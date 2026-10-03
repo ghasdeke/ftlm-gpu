@@ -1,4 +1,4 @@
-GPU-Accelerated FTLM for Heisenberg Spin Clusters
+ftlm-gpu: GPU-accelerated finite-temperature Lanczos method for spin Hamiltonians
 Copyright 2026 Shadan Ghassemi Tabrizi,
               Technische Universitaet Dresden, and
               Helmholtz-Zentrum Dresden-Rossendorf e.V.
