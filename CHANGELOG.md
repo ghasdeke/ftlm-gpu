@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.0 (unreleased)
+## v2.0.0 (2026-10-03)
 
 Feature release accompanying the revised paper. The results of v1 are
 reproduced up to rounding (the dot products are now summed in a
