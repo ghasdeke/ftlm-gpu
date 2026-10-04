@@ -18,8 +18,8 @@ abstract: >-
   the heat capacity C(T), the magnetic susceptibility chi(T) and the
   effective partition function Z_eff(T). MATLAB (MEX) and Python (CuPy)
   front ends share the same CUDA kernels.
-version: "2.0.0"
-date-released: "2026-10-03"
+version: "2.0.1"
+date-released: "2026-10-04"
 license: Apache-2.0
 repository-code: "https://github.com/ghasdeke/ftlm-gpu"
 doi: "10.5281/zenodo.20378646"   # Zenodo concept DOI (all versions, resolves to the latest)

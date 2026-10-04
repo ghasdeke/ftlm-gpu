@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.0.1 (2026-10-04)
+
+Paper scripts only. The computational code (CUDA kernels, MEX gateways,
+MATLAB and Python front ends) and all numerical results are unchanged
+from v2.0.0.
+
+### Changed
+- `examples/paper/make_figures.m`: the cluster sketches in Figs. 2 and 7
+  are rendered with lighting (semi-transparent faces, bonds as
+  cylinders, sites as spheres) and shown as bitmaps. Since the vector
+  PDF contains bitmaps only at screen resolution, the renderings are
+  also written at full resolution as `figN_clusterK.png` (with alpha
+  channel).
+- `examples/paper/summarize_results.m`: median and maximum ratio of the
+  total FTLM error of the s = 3/2 icosahedron (against the exact heat
+  capacity) to the empirical stochastic error of a single run (keys
+  `ico_exact_ratio_med`, `ico_exact_ratio_max`).
+
 ## v2.0.0 (2026-10-03)
 
 Feature release accompanying the revised paper. The results of v1 are

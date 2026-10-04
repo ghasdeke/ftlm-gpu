@@ -227,7 +227,8 @@ the Lanczos breakdown handling, and FTLM against exact diagonalization.
 ## Reproducing the paper
 
 All numbers, figures and tables of the paper (revised version) were
-produced with v2.0.0 by the following scripts:
+produced with the following scripts (v2.0.1; the computational code is
+that of v2.0.0):
 
 | Script | Content |
 |---|---|
@@ -242,7 +243,7 @@ produced with v2.0.0 by the following scripts:
 | `examples/paper/run_cpu_reference.m` | CPU variants of the precision study in a second MATLAB session, in parallel with the GPU studies (started by `run_all_studies` on Windows; elsewhere the CPU variants run in the same session) |
 | `examples/paper/study_ed_decomposition.m` | Fig. 7: error decomposition against exact diagonalization |
 | `examples/paper/study_exact_icosahedron.m` | comparison with the exact heat capacity of the s = 3/2 icosahedron (`examples/paper/data`) |
-| `examples/paper/make_figures.m` | Figs. 1-7 (PDF and PNG with up to 600 dpi) from the study files |
+| `examples/paper/make_figures.m` | Figs. 1-7 (PDF and PNG with up to 600 dpi) from the study files; the cluster sketches of Figs. 2 and 7 also as full-resolution PNG |
 | `examples/paper/summarize_results.m` | the numbers quoted in the text and the rows of Tables 3 and 5 (JSON) |
 
 The precision studies use `R = 100` (icosidodecahedron: `R = 8`), `M_lz = 100`, `ed_thresh = 0` and

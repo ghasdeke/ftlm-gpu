@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ftlm-gpu"
-version = "2.0.0"
+version = "2.0.1"
 description = "GPU-accelerated finite-temperature Lanczos method (FTLM) for spin Hamiltonians"
 readme = "README.md"
 license = { text = "Apache-2.0" }

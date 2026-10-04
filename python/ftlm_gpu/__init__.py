@@ -33,7 +33,7 @@ from .basis import Sector, sectors, enumerate_sector, build_clt, cr_tables, hami
 from .ftlm import run, sector_ftlm, solve_tridiag, observables, CpuLanczos, DEFAULTS
 from .io import load_input, save_results
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 __all__ = ["Model", "geometry", "GEOMETRIES", "Sector", "sectors", "enumerate_sector",
            "build_clt", "cr_tables", "hamiltonian", "run", "sector_ftlm", "solve_tridiag",
