@@ -325,6 +325,16 @@ if isfile(f)
     R.ico_exact_orders = num2words(floor(log10(S.max_err_total / S.max_dev_gpu_single)));
     R.ico_exact_Tmin = sprintf('%.3g', min(S.T));
     R.ico_exact_Tmax = sprintf('%.3g', max(S.T));
+    % total FTLM error relative to the stochastic error of a single run (Fig. 2)
+    g = fullfile(study_dir, 'study_seeds_ico_s3o2.mat');
+    if isfile(g)
+        G = load(g);
+        se = interp1(G.T_range(:), G.sigma_emp_C(:), S.T(:), 'pchip');
+        q = S.err_total_fp64(:) ./ se;
+        q = q(S.T(:) >= Tlo);
+        R.ico_exact_ratio_med = sprintf('%.2g', median(q));
+        R.ico_exact_ratio_max = sprintf('%.2g', max(q));
+    end
 end
 
 %% ---------------- ghosts --------------------------------------------------

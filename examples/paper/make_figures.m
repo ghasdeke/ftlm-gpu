@@ -4,6 +4,9 @@ function make_figures(varargin)
 %   reads the output of study_precision, study_seeds, study_ghosts,
 %   study_lanczos_steps and study_ed_decomposition from D and writes
 %   figN.pdf (vector) and figN.png (up to 600 dpi, at most 4000 px per side) to O.
+%   The cluster sketches (Figs. 2 and 7) are OpenGL renderings, which the
+%   vector PDF contains only at screen resolution; they are also written at
+%   full resolution as figN_clusterK.png (with alpha channel).
 %
 %     Fig. 1  C, chi and |Delta| (FP32 vs FP64, same GPU kernel), icosahedron s=1, 3/2
 %     Fig. 2  multi-seed analysis: runs, pooled result, sigma_emp, sigma_theo, |Delta_FP32|
@@ -104,6 +107,12 @@ function save_fig(fig, base)
     dpi = min(600, floor(4000 / max(fig.Position(3:4))));
     exportgraphics(fig, [base '.png'], 'Resolution', dpi, 'BackgroundColor', 'white');
     fprintf('saved %s.pdf/.png\n', base);
+    % the vector PDF contains the cluster sketches only at screen resolution:
+    % write them at full resolution (with alpha channel) for re-embedding
+    im = findobj(fig, 'Type', 'image', 'Tag', 'cluster');
+    for k = 1 : numel(im)
+        imwrite(im(k).UserData{1}, sprintf('%s_cluster%d.png', base, k), 'Alpha', im(k).UserData{2});
+    end
 end
 
 function S = load_study(o, name)
@@ -188,31 +197,88 @@ function inset_cluster(ax, key, st, box)
         case 'icosid_M0',   g = {'icosid'};
     end
     [bonds, ~, ~, ~, V] = ftlm.geometry(g{:});
+    if ~strcmp(g{1}, 'ring'), vw = [36 11]; else, vw = [0 90]; end
+    show_cluster(inset_axes(ax, box), V, bonds, vw, ~strcmp(g{1}, 'ring'));
+    st; %#ok<VUNUS>
+end
+
+function ia = inset_axes(ax, box)
     % axes in a tiled layout cannot be positioned manually: place the inset
     % in the figure, at the pixel position of the panel
+    % BOX = [x y w h] of the inset relative to the panel
     fig = ancestor(ax, 'figure');
     drawnow;
     pos = getpixelposition(ax, true);
     ia = axes(fig, 'Units', 'pixels', ...
               'Position', [pos(1) + box(1) * pos(3), pos(2) + box(2) * pos(4), box(3) * pos(3), box(4) * pos(4)]);
     ia.Units = 'normalized';
-    hold(ia, 'on');
-    if ~strcmp(g{1}, 'ring')
-        K = convhulln(V);
-        patch(ia, 'Faces', K, 'Vertices', V, 'FaceColor', [0.45 0.75 0.40], ...
-              'FaceAlpha', 0.35, 'EdgeColor', 'none');
-    end
-    for b = 1 : size(bonds, 1)
-        e = V(bonds(b, :), :);
-        plot3(ia, e(:, 1), e(:, 2), e(:, 3), '-', 'Color', [0.25 0.25 0.25], 'LineWidth', 0.6);
-    end
-    scatter3(ia, V(:, 1), V(:, 2), V(:, 3), 10, [0.55 0.15 0.60], 'filled');
-    axis(ia, 'equal'); axis(ia, 'off');
-    if ~strcmp(g{1}, 'ring'), view(ia, [25 18]); else, view(ia, 2); end
-    ia.Clipping = 'off';
+end
+
+function show_cluster(ia, V, bonds, vw, faces)
+    % the lit 3D rendering cannot be exported as vectors: render it off-screen
+    % with OpenGL and show the bitmap (with transparent background) in the inset
+    [rgb, alpha] = render_cluster(V, bonds, vw, faces);
+    image(ia, rgb, 'AlphaData', alpha, 'Tag', 'cluster', 'UserData', {rgb, alpha});
+    axis(ia, 'image', 'off');
     set(ia, 'HitTest', 'off');
-    %#ok<*NASGU>
-    st; %#ok<VUNUS>
+end
+
+function [rgb, alpha] = render_cluster(V, bonds, vw, faces)
+    % semi-transparent faces, bonds as cylinders and sites as spheres
+    px = 800;
+    f = figure('Visible', 'off', 'Color', 'w', 'Units', 'pixels', 'Position', [0 0 px px], ...
+               'Renderer', 'opengl');
+    a = axes(f, 'Units', 'normalized', 'Position', [0 0 1 1]);
+    hold(a, 'on');
+    V = V - mean(V, 1);
+    span = max(max(V) - min(V));
+    col = [0.7 0.3 0.7];
+    if faces
+        patch(a, 'Faces', convhulln(V), 'Vertices', V, 'FaceColor', [0.6 1.0 0.6], ...
+              'FaceAlpha', 0.7, 'EdgeColor', 'none');
+    end
+    [cx, cy, cz] = cylinder(0.02 * span, 32);
+    for b = 1 : size(bonds, 1)
+        p1 = V(bonds(b, 1), :);  d = V(bonds(b, 2), :) - p1;
+        h = norm(d);  u = d / h;  w = cross([0 0 1], u);
+        if norm(w) < 1e-14
+            R = diag([1, sign(u(3)), sign(u(3))]);
+        else                                          % rotation of the z axis onto u
+            w = w / norm(w);  th = acos(max(min(u(3), 1), -1));
+            K = [0 -w(3) w(2); w(3) 0 -w(1); -w(2) w(1) 0];
+            R = eye(3) + sin(th) * K + (1 - cos(th)) * K^2;
+        end
+        xyz = [cx(:), cy(:), h * cz(:)] * R' + p1;
+        surf(a, reshape(xyz(:, 1), size(cx)), reshape(xyz(:, 2), size(cx)), ...
+             reshape(xyz(:, 3), size(cx)), 'FaceColor', col, 'EdgeColor', 'none');
+    end
+    [sx, sy, sz] = sphere(64);
+    r = 0.06 * span;
+    for i = 1 : size(V, 1)
+        surf(a, r * sx + V(i, 1), r * sy + V(i, 2), r * sz + V(i, 3), ...
+             'FaceColor', col, 'EdgeColor', 'none');
+    end
+    L = 1.05 * (max(vecnorm(V, 2, 2)) + r) * [-1 1];
+    axis(a, 'equal', 'off', 'vis3d');
+    set(a, 'XLim', L, 'YLim', L, 'ZLim', L);
+    view(a, vw);
+    camlight(a, 'headlight');
+    lighting(a, 'gouraud');
+    material(a, 'shiny');
+    drawnow;
+    rgb = print(f, '-RGBImage', '-opengl', '-r0');
+    f.Color = 'k';
+    drawnow;
+    blk = print(f, '-RGBImage', '-opengl', '-r0');
+    close(f);
+    % coverage from the renderings on white and black background; the
+    % semi-transparent faces count as opaque
+    alpha = min(1, max(0, 1 - mean(double(rgb) - double(blk), 3) / 255) / 0.5);
+    rows = find(any(alpha > 0.02, 2));  cols = find(any(alpha > 0.02, 1));
+    rows = max(1, rows(1) - 4) : min(size(rgb, 1), rows(end) + 4);
+    cols = max(1, cols(1) - 4) : min(size(rgb, 2), cols(end) + 4);
+    rgb = rgb(rows, cols, :);
+    alpha = alpha(rows, cols);
 end
 
 %% ========================================================================
@@ -416,20 +482,5 @@ end
 
 function inset_ed(ax)
     [bonds, ~, ~, ~, V] = ftlm.geometry('cube');
-    fig = ancestor(ax, 'figure');
-    drawnow;
-    pos = getpixelposition(ax, true);
-    ia = axes(fig, 'Units', 'pixels', ...
-              'Position', [pos(1) + 0.60 * pos(3), pos(2) + 0.28 * pos(4), 0.22 * pos(3), 0.38 * pos(4)]);
-    ia.Units = 'normalized';
-    hold(ia, 'on');
-    K = convhulln(V);
-    patch(ia, 'Faces', K, 'Vertices', V, 'FaceColor', [0.45 0.75 0.40], 'FaceAlpha', 0.35, ...
-          'EdgeColor', 'none');
-    for b = 1 : size(bonds, 1)
-        e = V(bonds(b, :), :);
-        plot3(ia, e(:, 1), e(:, 2), e(:, 3), '-', 'Color', [0.25 0.25 0.25], 'LineWidth', 0.6);
-    end
-    scatter3(ia, V(:, 1), V(:, 2), V(:, 3), 10, [0.55 0.15 0.60], 'filled');
-    axis(ia, 'equal'); axis(ia, 'off'); view(ia, [30 20]);
+    show_cluster(inset_axes(ax, [0.60 0.28 0.22 0.38]), V, bonds, [30 20], true);
 end
